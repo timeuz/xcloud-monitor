@@ -1,4 +1,4 @@
-mod ai;
+mod legacy;
 mod bufferbloat;
 mod desktop;
 mod analysis;
@@ -99,6 +99,7 @@ pub fn run() {
                 });
             app.manage(history);
             history::spawn_sampler(app.handle().clone());
+            legacy::purge_openai_key();
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -129,10 +130,6 @@ pub fn run() {
             probe_single_host,
             run_bufferbloat,
             route::run_traceroute,
-            ai::ai_status,
-            ai::ai_verify,
-            ai::ai_save_key,
-            ai::ai_chat,
             history::history_stats,
             history::history_analysis,
             history::history_series,

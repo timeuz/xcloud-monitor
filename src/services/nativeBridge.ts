@@ -73,63 +73,6 @@ export async function fetchTracerouteReport(): Promise<TracerouteReport> {
 }
 
 // ---------------------------------------------------------------------------
-// AI co-pilot (OpenAI). The key lives in the OS keychain, managed by the Rust backend.
-// ---------------------------------------------------------------------------
-const LEGACY_KEY_STORAGE = 'xcloud_openai_api_key';
-
-export interface AiStatus {
-  enabled: boolean;
-  provider: string;
-  model: string;
-  message: string;
-}
-
-export interface AiChatResponse {
-  enabled: boolean;
-  reply: string;
-  error?: string;
-  details?: string;
-}
-
-/** Moves a key saved by older builds from localStorage into the keychain. */
-async function migrateLegacyKey(): Promise<void> {
-  try {
-    const legacy = localStorage.getItem(LEGACY_KEY_STORAGE);
-    if (!legacy) return;
-    await invokeTauri('ai_save_key', { apiKey: legacy });
-    localStorage.removeItem(LEGACY_KEY_STORAGE);
-  } catch {
-    // keep the legacy key if the keychain is unavailable
-  }
-}
-
-export async function fetchAiStatus(): Promise<AiStatus> {
-  requireDesktop('O copiloto de IA');
-  await migrateLegacyKey();
-  return invokeTauri<AiStatus>('ai_status');
-}
-
-export async function sendAiChat(payload: {
-  message: string;
-  context: unknown;
-  history: unknown;
-}): Promise<AiChatResponse> {
-  requireDesktop('O copiloto de IA');
-  return invokeTauri<AiChatResponse>('ai_chat', payload);
-}
-
-export async function verifyAiKey(apiKey: string): Promise<{ valid: boolean; message?: string }> {
-  requireDesktop('A verificação da chave');
-  return invokeTauri('ai_verify', { apiKey });
-}
-
-/** Saves (or, with an empty string, removes) the OpenAI key in the OS keychain. */
-export async function saveAiKey(apiKey: string): Promise<void> {
-  requireDesktop('O cofre de chaves');
-  await invokeTauri('ai_save_key', { apiKey });
-}
-
-// ---------------------------------------------------------------------------
 // Local measurement history (SQLite in the app data dir). Desktop only.
 // ---------------------------------------------------------------------------
 export interface HistoryStats {

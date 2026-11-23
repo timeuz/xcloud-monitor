@@ -1,17 +1,21 @@
 import React from 'react';
-import { GamingVerdict, NetworkMetrics } from '../types/telemetry';
+import { GamingVerdict, NetworkMetrics, StrategicEndpoint, TracerouteReport } from '../types/telemetry';
 import { CheckCircle2, AlertTriangle, XCircle, Clock, Zap, MapPin, Server, Wifi, Compass, Gauge } from 'lucide-react';
 
 interface VerdictBannerProps {
   verdict: GamingVerdict;
   metrics: NetworkMetrics;
   isHairpinning: boolean;
+  endpoints: StrategicEndpoint[];
+  traceroute: TracerouteReport;
 }
 
 export const VerdictBanner: React.FC<VerdictBannerProps> = ({
   verdict,
   metrics,
   isHairpinning,
+  endpoints,
+  traceroute,
 }) => {
   // Color tokens based on rank
   const getBadgeTheme = () => {
@@ -54,6 +58,12 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
 
   const theme = getBadgeTheme();
   const currentRtt = metrics.smoothedRttMs ?? metrics.rttMs;
+  const gateway = endpoints.find((e) => e.id === 'local_gateway');
+  const ispHop = endpoints.find((e) => e.id === 'isp_hop1');
+  const gatewayRtt = gateway?.online ? gateway.rttMs : null;
+  const ispRtt = ispHop?.online ? ispHop.rttMs : null;
+  const bloat = metrics.bufferbloatDeltaMs;
+  const routeMeasured = traceroute.hopCount > 0;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
@@ -123,10 +133,28 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
 
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-slate-400 flex items-center gap-1">
-                <Wifi className="w-3.5 h-3.5 text-slate-400" /> Rede Local:
+                <Wifi className="w-3.5 h-3.5 text-slate-400" /> Roteador:
               </span>
-              <span className={`font-semibold ${metrics.isWifi24Ghz || metrics.bufferbloatDeltaMs > 35 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                {metrics.isWifi24Ghz ? 'Wi-Fi 2.4GHz Instável' : metrics.bufferbloatDeltaMs > 35 ? 'Bufferbloat Elevado' : 'Estável e Otimizada'}
+              <span className={`font-semibold ${gatewayRtt == null ? 'text-slate-500' : gatewayRtt >= 15 ? 'text-red-400' : gatewayRtt >= 5 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                {gatewayRtt == null ? 'não medido' : `${gatewayRtt.toFixed(1)} ms`}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-slate-400 flex items-center gap-1">
+                <Server className="w-3.5 h-3.5 text-slate-400" /> 1º salto da operadora:
+              </span>
+              <span className={`font-semibold ${ispRtt == null ? 'text-slate-500' : 'text-slate-200'}`}>
+                {ispRtt == null ? 'não medido' : `${ispRtt.toFixed(1)} ms`}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-slate-400 flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 text-slate-400" /> Bufferbloat:
+              </span>
+              <span className={`font-semibold ${bloat == null ? 'text-slate-500' : bloat > 35 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                {bloat == null ? 'não testado' : `+${bloat.toFixed(1)} ms`}
               </span>
             </div>
           </div>
@@ -139,7 +167,7 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
               ? 'Problema na Rede Local / Roteador'
               : verdict.rootCauseCategory === 'ISP_ROUTE'
               ? 'Problema na Operadora / Rota BGP'
-              : 'Nenhum gargalo detectado (100% OK)'}
+              : 'Nenhum gargalo detectado nas medições'}
           </span>
         </div>
       </div>
@@ -150,16 +178,18 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-cyan-400" />
-              <span>ROTA BGP vs REDE LOCAL</span>
+              <span>ROTA ATÉ O XCLOUD</span>
             </span>
             <span
               className={`text-[11px] font-mono px-2 py-0.5 rounded font-bold ${
                 isHairpinning
                   ? 'bg-red-500 text-white'
-                  : 'bg-emerald-950 text-emerald-300 border border-emerald-800/40'
+                  : routeMeasured
+                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/40'
+                  : 'bg-slate-900 text-slate-400 border border-slate-700'
               }`}
             >
-              {isHairpinning ? 'ROTA RUIM (EUA)' : 'ROTA NACIONAL'}
+              {isHairpinning ? 'DESVIO P/ EUA' : routeMeasured ? 'SEM DESVIO' : 'AGUARDANDO'}
             </span>
           </div>
 
@@ -174,23 +204,29 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
                   Seus dados viajam para os EUA (Miami/Atlanta) antes de chegar a São Paulo. A culpa é do roteamento da sua operadora!
                 </p>
               </div>
-            ) : (
+            ) : routeMeasured ? (
               <div className="space-y-2">
                 <div className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Roteamento Direto via IX.br SP</span>
+                  <span>Sem desvio para fora do Brasil</span>
                 </div>
                 <p className="text-[11px] font-mono leading-relaxed text-slate-400">
-                  Tráfego entregue no Ponto de Troca de Tráfego de São Paulo (AS8075). Rota ótima com menor número de saltos.
+                  Rota medida com {traceroute.hopCount} saltos{traceroute.reached ? ' até o destino' : ' (o destino não respondeu ao traceroute)'}.
+                  {traceroute.detectedPop ? ` Ponto de entrada detectado: ${traceroute.detectedPop}.` : ''}
                 </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-sm font-bold text-slate-300">Rota ainda não medida</div>
+                <p className="text-[11px] font-mono leading-relaxed text-slate-400">{traceroute.summary}</p>
               </div>
             )}
           </div>
         </div>
 
         <div className="mt-3 pt-3 border-t border-cyan-900/30 flex items-center justify-between text-xs font-mono">
-          <span className="text-slate-400">Saltos Estimados (TTL):</span>
-          <span className="font-bold text-cyan-300">{metrics.ttlHops} Hops</span>
+          <span className="text-slate-400">Saltos até o xCloud:</span>
+          <span className="font-bold text-cyan-300">{routeMeasured ? traceroute.hopCount : '—'}</span>
         </div>
       </div>
     </div>

@@ -25,12 +25,10 @@ export interface NetworkMetrics {
   jitterMs: number;
   smoothedJitterMs?: number;
   packetLossPct: number;
-  bufferbloatDeltaMs: number;
+  /** null until a bufferbloat test has been run: there is no default value */
+  bufferbloatDeltaMs: number | null;
   samplesSent: number;
   samplesLost: number;
-  isWifi24Ghz: boolean;
-  ttlHops: number;
-  decodeTimeMs: number;
   resilience?: TelemetryResilience;
 }
 

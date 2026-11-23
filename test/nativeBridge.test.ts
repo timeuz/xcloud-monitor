@@ -24,8 +24,6 @@ async function testOutsideTauri() {
     () => bridge.fetchTelemetryProbe(),
     () => bridge.executeBufferbloatTest(),
     () => bridge.fetchTracerouteReport(),
-    () => bridge.fetchAiStatus(),
-    () => bridge.saveAiKey('x'),
     () => bridge.fetchHistorySeries(24),
     () => bridge.checkForUpdate(),
   ]) {
@@ -39,7 +37,6 @@ async function testCommandNamesAndArguments() {
   const calls: Array<[string, any]> = [];
   const answers: Record<string, any> = {
     probe_telemetry: { azureRtt: 41.5, endpoints: [] },
-    ai_status: { enabled: true },
     update_check: null,
     detect_session_peers: [{ ip: '13.104.105.250', port: 1069, bytes: 1, packets: 1 }],
   };
@@ -67,8 +64,6 @@ async function testCommandNamesAndArguments() {
   assert.deepStrictEqual(calls.pop(), ['history_set_enabled', { enabled: false }]);
 
   assert.strictEqual(await bridge.checkForUpdate(), null);
-  await bridge.saveAiKey('sk-test');
-  assert.deepStrictEqual(calls.pop(), ['ai_save_key', { apiKey: 'sk-test' }]);
   console.log('Confirmed: command names and argument keys.');
 
   delete (globalThis as any).window;
@@ -135,11 +130,9 @@ function testBridgeMatchesRustContract() {
     const rustKeys = params.get(cmd);
     assert.ok(rustKeys, `no #[tauri::command] fn found for "${cmd}"`);
     for (const k of keys) {
-      if (k === 'payload') continue; // spread object (ai_chat): checked below
       assert.ok(rustKeys!.has(k), `"${cmd}": frontend sends "${k}" but Rust expects ${[...rustKeys!].join(', ') || 'no arguments'}`);
     }
   }
-  assert.deepStrictEqual([...params.get('ai_chat')!].sort(), ['context', 'history', 'message']);
   console.log(`Confirmed: ${used.size} invoked commands are registered in Rust and their argument names match.`);
 }
 

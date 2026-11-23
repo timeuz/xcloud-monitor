@@ -47,9 +47,8 @@ Servidor Alvo: Azure brazilsouth (São Paulo - AS8075)
 * Média Móvel RTT (SMA): ${metrics.rttAvgMs.toFixed(1)} ms
 * Jitter Inter-chegada (RFC 3550 EWMA): ${metrics.jitterMs.toFixed(2)} ms
 * Taxa de Perda de Pacotes: ${metrics.packetLossPct.toFixed(2)}% (${metrics.samplesLost} perdidos de ${metrics.samplesSent} transmitidos)
-* Delta de Bufferbloat (Loaded - Idle): +${metrics.bufferbloatDeltaMs.toFixed(1)} ms
-* Meio Físico Identificado: ${metrics.isWifi24Ghz ? 'Wi-Fi 2.4 GHz (Interferência / Jitter alto)' : 'Ethernet / Wi-Fi 5GHz'}
-* Número de Saltos TTL: ${metrics.ttlHops} Hops
+* Delta de Bufferbloat (Loaded - Idle): ${metrics.bufferbloatDeltaMs == null ? 'não testado' : `+${metrics.bufferbloatDeltaMs.toFixed(1)} ms`}
+* Saltos até o xCloud (traceroute): ${traceroute.hopCount > 0 ? traceroute.hopCount : 'não medido'}
 
 ---
 

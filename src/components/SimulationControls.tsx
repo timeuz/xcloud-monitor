@@ -3,7 +3,6 @@ import { Sliders, RotateCcw, AlertTriangle, Wifi, Flame, Server, Play, Zap } fro
 
 interface SimulationControlsProps {
   onSimulateHairpinning: () => void;
-  onSimulateWifi: () => void;
   onSimulateBufferbloat: () => void;
   onResetNominal: () => void;
   onTriggerBufferbloat: () => void;
@@ -13,7 +12,6 @@ interface SimulationControlsProps {
 
 export const SimulationControls: React.FC<SimulationControlsProps> = ({
   onSimulateHairpinning,
-  onSimulateWifi,
   onSimulateBufferbloat,
   onResetNominal,
   onTriggerBufferbloat,
@@ -45,7 +43,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
       </p>
 
       {/* Button Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 gap-2.5">
         {/* 1. Hairpinning BGP */}
         <button
           onClick={() => {
@@ -66,27 +64,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
           </span>
         </button>
 
-        {/* 2. Wi-Fi 2.4GHz */}
-        <button
-          onClick={() => {
-            onSimulateWifi();
-          }}
-          className={`p-2.5 rounded-lg border text-left text-xs font-mono transition-all flex flex-col justify-between gap-1.5 ${
-            activeSimulation === 'wifi'
-              ? 'bg-amber-950/60 border-amber-500 text-amber-200 ring-1 ring-amber-500'
-              : 'bg-[#040b12] border-cyan-950 hover:border-amber-500/40 text-slate-300'
-          }`}
-        >
-          <div className="flex items-center gap-1.5 font-bold text-amber-400">
-            <Wifi className="w-3.5 h-3.5" />
-            <span>2. Wi-Fi 2.4 GHz</span>
-          </div>
-          <span className="text-[11px] text-slate-400 leading-tight">
-            Interferência & Jitter alto (&gt;15ms)
-          </span>
-        </button>
-
-        {/* 3. Bufferbloat */}
+        {/* 2. Bufferbloat */}
         <button
           onClick={() => {
             onSimulateBufferbloat();
@@ -99,7 +77,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         >
           <div className="flex items-center gap-1.5 font-bold text-amber-400">
             <Flame className="w-3.5 h-3.5" />
-            <span>3. Bufferbloat</span>
+            <span>2. Bufferbloat</span>
           </div>
           <span className="text-[11px] text-slate-400 leading-tight">
             Fila saturada no roteador (+68ms)
