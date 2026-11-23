@@ -14,7 +14,6 @@ import {
   Sparkles,
   ShieldCheck,
 } from 'lucide-react';
-import { playUiClick } from '../services/soundEffects';
 import { HistorySettings } from './HistorySettings';
 import { UpdateSettings } from './UpdateSettings';
 import { fetchAiStatus, isTauriApp, saveAiKey, verifyAiKey } from '../services/nativeBridge';
@@ -65,7 +64,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   const handleVerify = async () => {
-    playUiClick();
     const cleanKey = apiKey.trim();
     if (!cleanKey) {
       setVerifyStatus({
@@ -102,7 +100,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleSave = async () => {
-    playUiClick();
     const cleanKey = apiKey.trim();
     try {
       await saveAiKey(cleanKey);
@@ -123,7 +120,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleRemove = async () => {
-    playUiClick();
     setApiKey('');
     setVerifyStatus({
       type: 'success',
@@ -155,7 +151,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
           <button
             onClick={() => {
-              playUiClick();
               onClose();
             }}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 transition-colors"
@@ -194,7 +189,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  playUiClick();
                   setShowKey(!showKey);
                 }}
                 className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300 transition-colors"

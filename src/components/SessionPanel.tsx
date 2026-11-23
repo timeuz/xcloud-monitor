@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2, Server } from 'lucide-react';
 import { SessionRun, fetchSessionRuns, measureSessionPeer } from '../services/nativeBridge';
-import { playUiClick } from '../services/soundEffects';
 
 const fmt = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(1)} ms`);
 const when = (ts: number) => new Date(ts * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -64,7 +63,6 @@ sudo bash find-session-peer.sh`}</pre>
         onSubmit={async (e) => {
           e.preventDefault();
           if (!peer.trim() || busy) return;
-          playUiClick();
           setBusy(true);
           setError('');
           try {

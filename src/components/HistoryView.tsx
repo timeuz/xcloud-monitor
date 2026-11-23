@@ -9,7 +9,6 @@ import {
   fetchHistorySeries,
   isTauriApp,
 } from '../services/nativeBridge';
-import { playUiClick } from '../services/soundEffects';
 import { ChartSeries, Mark, Shade, TimeSeriesChart } from './charts/TimeSeriesChart';
 import { HourProfileChart } from './charts/HourProfileChart';
 import { UdpPanel } from './UdpPanel';
@@ -166,7 +165,6 @@ export const HistoryView: React.FC = () => {
                   key={w.hours}
                   type="button"
                   onClick={() => {
-                    playUiClick();
                     setHours(w.hours);
                   }}
                   className={`px-2.5 py-1 rounded transition-colors ${
@@ -180,7 +178,6 @@ export const HistoryView: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                playUiClick();
                 load();
               }}
               className="p-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-800/40"
@@ -192,7 +189,6 @@ export const HistoryView: React.FC = () => {
               type="button"
               disabled={exporting}
               onClick={async () => {
-                playUiClick();
                 setExporting(true);
                 setExportMsg('');
                 try {
@@ -284,7 +280,6 @@ export const HistoryView: React.FC = () => {
                   key={g}
                   type="button"
                   onClick={() => {
-                    playUiClick();
                     setGroup(g);
                   }}
                   className={`px-2.5 py-1 rounded ${group === g ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold' : 'text-slate-400'}`}

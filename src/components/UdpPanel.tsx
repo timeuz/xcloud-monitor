@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Activity, Loader2 } from 'lucide-react';
 import { UdpRunRow, UdpTestResponse, fetchUdpRuns, runUdpTest } from '../services/nativeBridge';
-import { playUiClick } from '../services/soundEffects';
 
 const fmt = (v: number | null | undefined, unit = 'ms') => (v == null ? '—' : `${v.toFixed(1)} ${unit}`);
 const when = (ts: number) => new Date(ts * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -61,7 +60,6 @@ export const UdpPanel: React.FC = () => {
           disabled={busy}
           title="Envia cerca de 1.500 pacotes de 20 bytes (30 KB) a servidores públicos. Leva ~35 s."
           onClick={async () => {
-            playUiClick();
             if (!confirming) {
               setConfirming(true);
               return;

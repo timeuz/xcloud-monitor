@@ -1,14 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { MessageSquare, Send, Sparkles, User, Bot, Wifi, Server, Activity, AlertTriangle, Loader2, Settings } from 'lucide-react';
-import { playUiClick } from '../services/soundEffects';
 import { fetchAiStatus, sendAiChat, AiChatResponse } from '../services/nativeBridge';
-import { GamingVerdict, NetworkMetrics, XCloudServerStatus, StrategicEndpoint, TracerouteReport } from '../types/telemetry';
+import { GamingVerdict, NetworkMetrics, StrategicEndpoint, TracerouteReport } from '../types/telemetry';
 
 interface RobotMascotProps {
   verdict: GamingVerdict;
   metrics: NetworkMetrics;
-  serverStatus: XCloudServerStatus;
   isHairpinning: boolean;
   endpoints?: StrategicEndpoint[];
   traceroute?: TracerouteReport;
@@ -28,7 +26,6 @@ interface ChatMessage {
 export const RobotMascot: React.FC<RobotMascotProps> = ({
   verdict,
   metrics,
-  serverStatus,
   isHairpinning,
   endpoints = [],
   traceroute,
@@ -394,7 +391,6 @@ export const RobotMascot: React.FC<RobotMascotProps> = ({
 
   const handleSendPrompt = async (questionText: string, category?: 'verdict' | 'servers' | 'route' | 'tips') => {
     if (isAiLoading) return;
-    playUiClick();
     const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     // 1. Add User Message
@@ -423,7 +419,6 @@ export const RobotMascot: React.FC<RobotMascotProps> = ({
               context: {
                 metrics,
                 verdict,
-                serverStatus,
                 isHairpinning,
                 endpoints,
                 traceroute,
@@ -485,15 +480,15 @@ export const RobotMascot: React.FC<RobotMascotProps> = ({
     let botReplyText = '';
     const currentRtt = metrics.smoothedRttMs ?? metrics.rttMs;
     if (category === 'verdict') {
-      botReplyText = `[Diagnóstico Local] ${verdict.headline}. ${verdict.queueStatusText}`;
+      botReplyText = `[Diagnóstico Local] ${verdict.headline}. ${verdict.statusText}`;
       if (metrics.resilience) {
         botReplyText += ` Análise resiliente (N=10): tendência ${metrics.resilience.trend.toLowerCase()} com ${metrics.resilience.stabilityScore}% de consistência.`;
       }
     } else if (category === 'servers') {
       if (currentRtt >= 45.0) {
-        botReplyText = `[Diagnóstico de Isolamento] Atenção: Embora os servidores Microsoft estejam com ${serverStatus.serverLoadPercentage}% de carga e fila de ${serverStatus.estimatedWaitMinutes} minutos, sua latência de rede está alta (${currentRtt.toFixed(1)}ms). O gargalo está na conexão de internet, gerando atraso e input lag nos comandos! O momento não é bom para jogar.`;
+        botReplyText = `[Diagnóstico de Isolamento] Atenção: sua latência de rede está alta (${currentRtt.toFixed(1)}ms). O gargalo está na conexão de internet, gerando atraso e input lag nos comandos! O momento não é bom para jogar.`;
       } else {
-        botReplyText = `[Diagnóstico Local] Isolamento: ${verdict.rootCauseTitle}. ${verdict.rootCauseDescription} Servidores Microsoft operando com ${serverStatus.serverLoadPercentage}% de carga e fila estimada de ${serverStatus.estimatedWaitMinutes} minutos.`;
+        botReplyText = `[Diagnóstico Local] Isolamento: ${verdict.rootCauseTitle}. ${verdict.rootCauseDescription}`;
       }
     } else if (category === 'route') {
       if (isHairpinning) {
@@ -575,7 +570,6 @@ export const RobotMascot: React.FC<RobotMascotProps> = ({
           {onOpenSettings && (
             <button
               onClick={() => {
-                playUiClick();
                 onOpenSettings();
               }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-colors bg-[#030910] text-slate-400 hover:text-cyan-300 border-cyan-900/40 hover:border-cyan-500/40"
@@ -600,7 +594,6 @@ export const RobotMascot: React.FC<RobotMascotProps> = ({
               {onOpenSettings && (
                 <button
                   onClick={() => {
-                    playUiClick();
                     onOpenSettings();
                   }}
                   className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-colors flex items-center gap-1 shrink-0"

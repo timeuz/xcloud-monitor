@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { StrategicEndpoint } from '../types/telemetry';
 import { Server, Globe, Search, PlusCircle, Check, X, ShieldAlert, Cpu } from 'lucide-react';
-import { playUiClick } from '../services/soundEffects';
 
 interface StrategicMatrixProps {
   endpoints: StrategicEndpoint[];
@@ -24,7 +23,6 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
   const handleAddHost = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputHost.trim()) {
-      playUiClick();
       onProbeCustomHost(inputHost.trim());
       setInputHost('');
     }
@@ -77,7 +75,6 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
         <button
           onClick={() => {
             setSelectedFilter('all');
-            playUiClick();
           }}
           className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
             selectedFilter === 'all'
@@ -90,7 +87,6 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
         <button
           onClick={() => {
             setSelectedFilter('borda_brasil');
-            playUiClick();
           }}
           className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
             selectedFilter === 'borda_brasil'
@@ -103,7 +99,6 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
         <button
           onClick={() => {
             setSelectedFilter('azure_brazilsouth');
-            playUiClick();
           }}
           className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
             selectedFilter === 'azure_brazilsouth'
@@ -116,7 +111,6 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
         <button
           onClick={() => {
             setSelectedFilter('ix_nacional');
-            playUiClick();
           }}
           className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
             selectedFilter === 'ix_nacional'
@@ -129,7 +123,6 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
         <button
           onClick={() => {
             setSelectedFilter('referencia_internacional');
-            playUiClick();
           }}
           className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
             selectedFilter === 'referencia_internacional'
@@ -142,7 +135,6 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
         <button
           onClick={() => {
             setSelectedFilter('ipv6');
-            playUiClick();
           }}
           className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
             selectedFilter === 'ipv6'
@@ -168,7 +160,6 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
           </div>
           <button
             onClick={() => {
-              playUiClick();
               onClearCustomHost();
             }}
             className="text-slate-400 hover:text-red-400 p-1 transition-colors"

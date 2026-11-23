@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=Network;Utility;
+Comment=Monitor de telemetria e diagnostico de rede para Xbox Cloud Gaming no Brasil
+Exec={{exec}}
+StartupWMClass={{exec}}
+Icon={{icon}}
+Name=xCloud Cyber-Monitor
+Terminal=false
+Type=Application

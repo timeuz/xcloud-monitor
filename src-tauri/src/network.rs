@@ -37,27 +37,6 @@ pub struct TelemetryProbeResponse {
     pub custom_host: Option<CustomHostResult>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct XCloudStatusResponse {
-    pub region: String,
-    #[serde(rename = "regionStatus")]
-    pub region_status: String,
-    #[serde(rename = "dataCenter")]
-    pub data_center: String,
-    #[serde(rename = "serverLoadPercentage")]
-    pub server_load_percentage: u32,
-    #[serde(rename = "estimatedWaitMinutes")]
-    pub estimated_wait_minutes: u32,
-    #[serde(rename = "queueRisk")]
-    pub queue_risk: String,
-    #[serde(rename = "queueMessage")]
-    pub queue_message: String,
-    #[serde(rename = "currentHourBRT")]
-    pub current_hour_brt: String,
-    #[serde(rename = "peeringHealth")]
-    pub peering_health: String,
-}
-
 /// Ids measured by older versions and since retired (they never answered, were duplicates of another
 /// target, or were not representative). Their stored rows are dropped when the history opens.
 pub const RETIRED_TARGETS: &[&str] = &[
@@ -426,39 +405,6 @@ pub fn probe_all_strategic(custom_host: Option<String>) -> TelemetryProbeRespons
     }
 }
 
-/// Real-time status model for Microsoft xCloud Brazil South Cluster
-pub fn calculate_xcloud_status() -> XCloudStatusResponse {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    // UTC-3 Brasília
-    let total_minutes = (now / 60) as i64 - (3 * 60);
-    let hour = ((total_minutes / 60) % 24 + 24) % 24;
-    let minute = (total_minutes % 60 + 60) % 60;
-
-    let (load, queue_risk, wait_min, queue_msg) = if hour >= 18 && hour < 23 {
-        (78, "HIGH", 12, "Horário de pico noturno no Brasil. Risco de fila para jogos populares.")
-    } else if hour >= 13 && hour < 18 {
-        (52, "MEDIUM", 3, "Demanda moderada no Cluster São Paulo. Sessões iniciando rapidamente.")
-    } else {
-        (28, "NONE", 0, "Cluster operando com baixa ocupação. Inicialização instantânea sem filas.")
-    };
-
-    XCloudStatusResponse {
-        region: "Brazil South (São Paulo)".into(),
-        region_status: "NORMAL_OPERATION".into(),
-        data_center: "Equinix SP3 / Azure Brazil South".into(),
-        server_load_percentage: load,
-        estimated_wait_minutes: wait_min,
-        queue_risk: queue_risk.into(),
-        queue_message: queue_msg.into(),
-        current_hour_brt: format!("{:02}:{:02} BRT", hour, minute),
-        peering_health: "PNI 100G Direto AS8075 Operacional".into(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::parse_ping_output;
@@ -487,16 +433,6 @@ mod tests {
     }
 
     use super::*;
-
-    #[test]
-    fn test_xcloud_status_calculation() {
-        let status = calculate_xcloud_status();
-        assert_eq!(status.region, "Brazil South (São Paulo)");
-        assert_eq!(status.region_status, "NORMAL_OPERATION");
-        assert!(status.server_load_percentage >= 20 && status.server_load_percentage <= 100);
-        assert!(!status.current_hour_brt.is_empty());
-        assert!(["NONE", "LOW", "MEDIUM", "HIGH"].contains(&status.queue_risk.as_str()));
-    }
 
     #[test]
     fn test_probe_host_sanitization() {

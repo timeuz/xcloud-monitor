@@ -24,8 +24,6 @@ async function testOutsideTauri() {
     () => bridge.fetchTelemetryProbe(),
     () => bridge.executeBufferbloatTest(),
     () => bridge.fetchTracerouteReport(),
-    () => bridge.fetchXCloudStatus(),
-    () => bridge.fetchActiveGameQueue(),
     () => bridge.fetchAiStatus(),
     () => bridge.saveAiKey('x'),
     () => bridge.fetchHistorySeries(24),
@@ -33,7 +31,6 @@ async function testOutsideTauri() {
   ]) {
     assert.match(await rejects(call()), /desktop/i);
   }
-  assert.deepStrictEqual(await bridge.searchXCloudGames('a'), [], 'too-short queries never hit the backend');
   console.log('Confirmed: no HTTP fallbacks, no invented data.');
 }
 
@@ -42,9 +39,6 @@ async function testCommandNamesAndArguments() {
   const calls: Array<[string, any]> = [];
   const answers: Record<string, any> = {
     probe_telemetry: { azureRtt: 41.5, endpoints: [] },
-    xcloud_active_game: { ok: false },
-    xcloud_recent_games: { games: [{ titleId: 'A' }] },
-    xcloud_search_games: { results: [{ titleId: 'B' }] },
     ai_status: { enabled: true },
     update_check: null,
   };
@@ -61,12 +55,6 @@ async function testCommandNamesAndArguments() {
   assert.strictEqual((await bridge.fetchTelemetryProbe('1.2.3.4')).azureRtt, 41.5);
   assert.deepStrictEqual(calls.pop(), ['probe_telemetry', { customHost: '1.2.3.4' }]);
 
-  assert.strictEqual(await bridge.fetchActiveGameQueue(), null, 'ok:false means no queue');
-  assert.deepStrictEqual(calls.pop(), ['xcloud_active_game', { titleId: null }]);
-
-  assert.strictEqual((await bridge.fetchRecentGames()).length, 1);
-  assert.strictEqual((await bridge.searchXCloudGames('  fort ')).length, 1);
-  assert.deepStrictEqual(calls.pop(), ['xcloud_search_games', { query: 'fort' }]);
 
   await bridge.fetchHistorySeries(24);
   assert.deepStrictEqual(calls.pop(), ['history_series', { windowHours: 24 }]);

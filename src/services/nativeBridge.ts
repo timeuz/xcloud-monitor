@@ -1,10 +1,4 @@
-import {
-  StrategicEndpoint,
-  TracerouteReport,
-  XCloudServerStatus,
-  LiveGameQueue,
-  XCloudGameSearchResult,
-} from '../types/telemetry';
+import { StrategicEndpoint, TracerouteReport } from '../types/telemetry';
 
 export interface TelemetryProbeResponse {
   timestamp: number;
@@ -76,49 +70,6 @@ export async function executeBufferbloatTest(): Promise<BufferbloatResponse> {
 export async function fetchTracerouteReport(): Promise<TracerouteReport> {
   requireDesktop('A medição real de rota');
   return invokeTauri<TracerouteReport>('run_traceroute');
-}
-
-/** Time-of-day congestion model for the xCloud Brazil South region. */
-export async function fetchXCloudStatus(): Promise<XCloudServerStatus> {
-  requireDesktop('O status do xCloud');
-  return invokeTauri<XCloudServerStatus>('get_xcloud_status');
-}
-
-/** Real-time queue estimate for the active or queried game, from xCloud with the xStreaming session. */
-export async function fetchActiveGameQueue(titleId?: string): Promise<LiveGameQueue | null> {
-  requireDesktop('A fila do xCloud');
-  const data: any = await invokeTauri('xcloud_active_game', { titleId: titleId ?? null });
-  return data.ok ? data : null;
-}
-
-/** Recently played titles (xCloud MRU). */
-export async function fetchRecentGames(): Promise<Array<{ titleId: string; productId: string; titleName: string; posterUrl?: string; lastTimePlayed?: string }>> {
-  requireDesktop('Os jogos recentes');
-  const data: any = await invokeTauri('xcloud_recent_games');
-  return data.games || [];
-}
-
-/** Searches xCloud titles with name and box art. */
-export async function searchXCloudGames(query: string): Promise<XCloudGameSearchResult[]> {
-  if (!query || query.trim().length < 2) return [];
-  requireDesktop('A busca de jogos');
-  const data: any = await invokeTauri('xcloud_search_games', { query: query.trim() });
-  if (data.ok === false && data.message) throw new Error(data.message);
-  return data.results || [];
-}
-
-/** Live wait time in seconds for a specific title. */
-export async function fetchGameWaitTime(
-  titleId: string
-): Promise<{ estimatedWaitSeconds: number; estimatedWaitMinutes: number; provisioningSeconds: number; allocationSeconds: number }> {
-  requireDesktop('A fila do xCloud');
-  return invokeTauri('xcloud_waittime', { titleId });
-}
-
-/** Local xStreaming session status (gamertag, connected or not). */
-export async function fetchUserSession(): Promise<{ connected: boolean; gamertag?: string; gamerpic?: string; region?: string; message?: string }> {
-  requireDesktop('A sessão do xStreaming');
-  return invokeTauri('xcloud_user_session');
 }
 
 // ---------------------------------------------------------------------------

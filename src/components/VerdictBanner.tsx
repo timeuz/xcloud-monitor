@@ -1,17 +1,15 @@
 import React from 'react';
-import { GamingVerdict, XCloudServerStatus, NetworkMetrics } from '../types/telemetry';
+import { GamingVerdict, NetworkMetrics } from '../types/telemetry';
 import { CheckCircle2, AlertTriangle, XCircle, Clock, Zap, MapPin, Server, Wifi, Compass, Gauge } from 'lucide-react';
 
 interface VerdictBannerProps {
   verdict: GamingVerdict;
-  serverStatus: XCloudServerStatus;
   metrics: NetworkMetrics;
   isHairpinning: boolean;
 }
 
 export const VerdictBanner: React.FC<VerdictBannerProps> = ({
   verdict,
-  serverStatus,
   metrics,
   isHairpinning,
 }) => {
@@ -82,16 +80,6 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
           </div>
         </div>
 
-        <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
-          <div className="flex items-center gap-1.5 text-slate-300">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Fila Estimada:</span>
-          </div>
-          <span className="font-bold text-slate-100">
-            {serverStatus.estimatedWaitMinutes === 0 ? 'Sem Fila (< 1 min)' : `~${serverStatus.estimatedWaitMinutes} min`}
-          </span>
-        </div>
-
         {metrics.resilience && (
           <div className="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono">
             <span className="text-slate-400">Resiliência (N=10):</span>
@@ -141,15 +129,6 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
                 {metrics.isWifi24Ghz ? 'Wi-Fi 2.4GHz Instável' : metrics.bufferbloatDeltaMs > 35 ? 'Bufferbloat Elevado' : 'Estável e Otimizada'}
               </span>
             </div>
-
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-400 flex items-center gap-1">
-                <Server className="w-3.5 h-3.5 text-slate-400" /> Datacenter Azure:
-              </span>
-              <span className={`font-semibold ${serverStatus.serverLoadPercentage > 85 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                {serverStatus.serverLoadPercentage}% de Carga ({serverStatus.queueRisk === 'HIGH' ? 'Pico' : 'Normal'})
-              </span>
-            </div>
           </div>
         </div>
 
@@ -160,8 +139,6 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
               ? 'Problema na Rede Local / Roteador'
               : verdict.rootCauseCategory === 'ISP_ROUTE'
               ? 'Problema na Operadora / Rota BGP'
-              : verdict.rootCauseCategory === 'MICROSOFT_SERVERS'
-              ? 'Sobrecarga nos Servidores Microsoft'
               : 'Nenhum gargalo detectado (100% OK)'}
           </span>
         </div>

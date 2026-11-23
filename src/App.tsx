@@ -3,10 +3,8 @@ import {
   NetworkMetrics,
   StrategicEndpoint,
   TracerouteReport,
-  XCloudServerStatus,
   GamingVerdict,
   GamingRank,
-  LiveGameQueue,
 } from './types/telemetry';
 import { NetworkMap2D } from './components/NetworkMap2D';
 import { RobotMascot } from './components/RobotMascot';
@@ -15,7 +13,6 @@ import { TelemetryGauges } from './components/TelemetryGauges';
 import { StrategicMatrix } from './components/StrategicMatrix';
 import { RouteDiagnostics } from './components/RouteDiagnostics';
 import { SimulationControls } from './components/SimulationControls';
-import { ActiveGameQueueWidget } from './components/ActiveGameQueueWidget';
 import { ReportModal } from './components/ReportModal';
 import { HistoryView } from './components/HistoryView';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -23,10 +20,8 @@ import { DesktopOnlyNotice } from './components/DesktopOnlyNotice';
 import { computeVerdict, rawRankWithHysteresis } from './domain/verdict';
 import { FORCED_HAIRPIN, nextHairpinState, smoothRtt } from './domain/telemetry';
 import { SettingsModal } from './components/SettingsModal';
-import { playUiClick } from './services/soundEffects';
 import {
   fetchTelemetryProbe,
-  fetchXCloudStatus,
   executeBufferbloatTest,
   fetchTracerouteReport,
   isTauriApp,
@@ -92,34 +87,6 @@ function Dashboard() {
 
   const [customHostResult, setCustomHostResult] = useState<{ host: string; rttMs: number | null; online: boolean } | null>(null);
 
-  // Server & Queue State
-  const [serverStatus, setServerStatus] = useState<XCloudServerStatus>({
-    region: 'brazilsouth (São Paulo)',
-    regionStatus: 'ONLINE_OPTIMAL',
-    dataCenter: 'Azure São Paulo Campus (Barueri / Campinas / Vinhedo)',
-    serverLoadPercentage: 42,
-    estimatedWaitMinutes: 0,
-    queueRisk: 'NONE',
-    queueMessage: 'Sem filas identificadas. Servidores operando com folga de capacidade.',
-    currentHourBRT: '14:30',
-    peeringHealth: '100% PNI & IX.br Operacionais',
-  });
-
-  // Active Game Live Queue (from xStreaming / Azure)
-  const [activeGameQueue, setActiveGameQueue] = useState<LiveGameQueue | null>(null);
-
-  const handleQueueUpdated = useCallback((queue: LiveGameQueue) => {
-    setActiveGameQueue(queue);
-    setServerStatus((prev) => ({
-      ...prev,
-      estimatedWaitMinutes: queue.estimatedWaitMinutes,
-      queueRisk: queue.estimatedWaitMinutes > 5 ? 'HIGH' : queue.estimatedWaitMinutes > 0.5 ? 'MEDIUM' : 'NONE',
-      queueMessage: queue.estimatedWaitMinutes > 0
-        ? `Fila oficial de ${queue.estimatedWaitMinutes} min para ${queue.titleName}.`
-        : `Servidor alocando ${queue.titleName} imediatamente.`,
-    }));
-  }, []);
-
   // Traceroute State
   const [traceroute, setTraceroute] = useState<TracerouteReport>({
     target: '191.235.228.36 (xCloud Cluster Brasil Sul)',
@@ -158,7 +125,7 @@ function Dashboard() {
     confirmedHairpinningRef.current;
 
 
-  const rawVerdict = computeVerdict({ metrics, isHairpinning, serverStatus });
+  const rawVerdict = computeVerdict({ metrics, isHairpinning });
   // The effective verdict uses the confirmed stable rank to prevent micro-fluctuations
   const verdict: GamingVerdict = {
     ...rawVerdict,
@@ -265,9 +232,7 @@ function Dashboard() {
               prev.packetLossPct,
               prev.isWifi24Ghz,
               prev.bufferbloatDeltaMs,
-              confirmedHairpinningRef.current,
-              serverStatus.serverLoadPercentage,
-              serverStatus.queueRisk
+              confirmedHairpinningRef.current
             );
 
             if (candidateRankRef.current.rank === rawTargetRank) {
@@ -312,22 +277,7 @@ function Dashboard() {
     } finally {
       isProbingRef.current = false;
     }
-  }, [activeSimulation, metrics.jitterMs, metrics.packetLossPct, stableRank, serverStatus, traceroute.isHairpinning]);
-
-  // Periodic Server Status Fetch
-  const fetchServerStatus = useCallback(async () => {
-    try {
-      const data = await fetchXCloudStatus();
-      if (data) {
-        setServerStatus((prev) => ({
-          ...prev,
-          ...data,
-        }));
-      }
-    } catch (e) {
-      // Ignore
-    }
-  }, []);
+  }, [activeSimulation, metrics.jitterMs, metrics.packetLossPct, stableRank, traceroute.isHairpinning]);
 
   // Ensure the page stays at the very top on load and on tab switch
   useEffect(() => {
@@ -339,28 +289,21 @@ function Dashboard() {
   // Periodic polling interval
   useEffect(() => {
     fetchTelemetry();
-    fetchServerStatus();
 
     const interval = setInterval(() => {
       fetchTelemetry();
     }, 4000);
 
-    const statusInterval = setInterval(() => {
-      fetchServerStatus();
-    }, 15000);
-
     return () => {
       clearInterval(interval);
-      clearInterval(statusInterval);
     };
-  }, [fetchTelemetry, fetchServerStatus]);
+  }, [fetchTelemetry]);
 
   // Active Bufferbloat Burst Runner
   const [bufferbloatNote, setBufferbloatNote] = useState('');
 
   const handleTriggerBufferbloat = async () => {
     setIsTestingBufferbloat(true);
-    playUiClick();
 
     try {
       setBufferbloatNote('');
@@ -454,17 +397,6 @@ function Dashboard() {
     }));
   };
 
-  const handleSimulateServerLoad = () => {
-    setActiveSimulation('server_load');
-    setStableRank('B');
-    setServerStatus((prev) => ({
-      ...prev,
-      serverLoadPercentage: 94,
-      estimatedWaitMinutes: 12,
-      queueRisk: 'HIGH',
-      queueMessage: 'Horário de Pico Severo (Fim de Semana à noite). Fila estimada de 12 minutos para alocar console Xbox Series X.',
-    }));
-  };
 
   const handleResetNominal = () => {
     rttWindowRef.current = [35.4, 35.6, 35.3, 35.5, 35.4, 35.2, 35.4];
@@ -496,19 +428,11 @@ function Dashboard() {
       },
     });
     refreshTraceroute();
-    setServerStatus((prev) => ({
-      ...prev,
-      serverLoadPercentage: 38,
-      estimatedWaitMinutes: 0,
-      queueRisk: 'NONE',
-      queueMessage: 'Sem filas identificadas. Servidores operando com folga de capacidade.',
-    }));
   };
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    playUiClick();
-    await Promise.all([fetchTelemetry(), fetchServerStatus()]);
+    await fetchTelemetry();
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
@@ -536,7 +460,6 @@ function Dashboard() {
           <button
             onClick={() => {
               setActiveTab('dashboard');
-              playUiClick();
             }}
             className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
               activeTab === 'dashboard'
@@ -549,7 +472,6 @@ function Dashboard() {
           <button
             onClick={() => {
               setActiveTab('route');
-              playUiClick();
             }}
             className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
               activeTab === 'route'
@@ -562,7 +484,6 @@ function Dashboard() {
           <button
             onClick={() => {
               setActiveTab('servers');
-              playUiClick();
             }}
             className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
               activeTab === 'servers'
@@ -570,12 +491,11 @@ function Dashboard() {
                 : 'hover:text-slate-200'
             }`}
           >
-            Servidores & Filas
+            Alvos de Medição
           </button>
           <button
             onClick={() => {
               setActiveTab('history');
-              playUiClick();
             }}
             className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
               activeTab === 'history'
@@ -588,7 +508,6 @@ function Dashboard() {
           <button
             onClick={() => {
               setActiveTab('globe');
-              playUiClick();
             }}
             className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
               activeTab === 'globe'
@@ -604,7 +523,6 @@ function Dashboard() {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => {
-              playUiClick();
               setIsSettingsOpen(true);
             }}
             className="p-2 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-800/40 transition-colors"
@@ -621,7 +539,6 @@ function Dashboard() {
           </button>
           <button
             onClick={() => {
-              playUiClick();
               setIsReportOpen(true);
             }}
             className="p-2 xl:px-3.5 xl:py-1.5 text-xs font-mono font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black transition-colors whitespace-nowrap shadow-sm flex items-center gap-1.5"
@@ -641,13 +558,9 @@ function Dashboard() {
         {/* Top Direct Answers Banner */}
         <VerdictBanner
           verdict={verdict}
-          serverStatus={serverStatus}
           metrics={metrics}
           isHairpinning={isHairpinning}
         />
-
-        {/* Live Active Game Queue & Catalog Search Widget */}
-        <ActiveGameQueueWidget onQueueUpdated={handleQueueUpdated} />
 
         {/* Robot Mascot & 2D Tactical World Map Split */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
@@ -655,8 +568,7 @@ function Dashboard() {
             <RobotMascot
               verdict={verdict}
               metrics={metrics}
-              serverStatus={serverStatus}
-              isHairpinning={isHairpinning}
+                  isHairpinning={isHairpinning}
               endpoints={endpoints}
               traceroute={traceroute}
               onOpenSettings={() => setIsSettingsOpen(true)}
@@ -690,7 +602,6 @@ function Dashboard() {
             onSimulateHairpinning={handleSimulateHairpinning}
             onSimulateWifi={handleSimulateWifi}
             onSimulateBufferbloat={handleSimulateBufferbloat}
-            onSimulateServerLoad={handleSimulateServerLoad}
             onResetNominal={handleResetNominal}
             onTriggerBufferbloat={handleTriggerBufferbloat}
             isTestingBufferbloat={isTestingBufferbloat}
@@ -724,7 +635,6 @@ function Dashboard() {
 
         {activeTab === 'servers' && (
           <div className="space-y-4">
-            <ActiveGameQueueWidget onQueueUpdated={handleQueueUpdated} />
             <StrategicMatrix
               endpoints={endpoints}
               customHostResult={customHostResult}
@@ -778,7 +688,6 @@ function Dashboard() {
         metrics={metrics}
         endpoints={endpoints}
         traceroute={traceroute}
-        serverStatus={serverStatus}
         verdict={verdict}
       />
 

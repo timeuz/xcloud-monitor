@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Download, Loader2, X } from 'lucide-react';
 import { UpdateInfo, checkForUpdate, installUpdate, isTauriApp, openReleasesPage } from '../services/nativeBridge';
-import { playUiClick } from '../services/soundEffects';
 
 const FIRST_CHECK_MS = 15_000;
 const RECHECK_MS = 6 * 60 * 60 * 1000;
@@ -48,7 +47,6 @@ export const UpdateBanner: React.FC = () => {
             type="button"
             disabled={busy}
             onClick={async () => {
-              playUiClick();
               setBusy(true);
               setError('');
               try {
@@ -67,7 +65,6 @@ export const UpdateBanner: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              playUiClick();
               openReleasesPage().catch((err) => setError(String(err)));
             }}
             className="px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200"
@@ -79,7 +76,6 @@ export const UpdateBanner: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              playUiClick();
               setDismissed(true);
             }}
             className="p-1.5 rounded text-slate-400 hover:text-slate-100"
