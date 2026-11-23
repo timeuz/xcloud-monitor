@@ -446,6 +446,19 @@ export async function measureSessionPeer(peer: string, note?: string): Promise<S
   return invokeTauri<SessionRun>('measure_session_peer', { peer, note: note ?? null });
 }
 
+export interface PeerCandidate {
+  ip: string;
+  port: number | null;
+  bytes: number;
+  packets: number;
+}
+
+/** Linux: captures UDP for a few seconds (graphical admin prompt) and returns the busiest public peers. */
+export async function detectSessionPeers(): Promise<PeerCandidate[]> {
+  requireDesktop('A detecção do servidor da sessão');
+  return invokeTauri<PeerCandidate[]>('detect_session_peers');
+}
+
 export async function fetchSessionRuns(limit = 20): Promise<SessionRun[]> {
   requireDesktop('O histórico do servidor da sessão');
   return invokeTauri<SessionRun[]>('history_session_runs', { limit });

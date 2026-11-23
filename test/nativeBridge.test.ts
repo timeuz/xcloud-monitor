@@ -41,6 +41,7 @@ async function testCommandNamesAndArguments() {
     probe_telemetry: { azureRtt: 41.5, endpoints: [] },
     ai_status: { enabled: true },
     update_check: null,
+    detect_session_peers: [{ ip: '13.104.105.250', port: 1069, bytes: 1, packets: 1 }],
   };
   (globalThis as any).window = {
     __TAURI_INTERNALS__: {
@@ -55,6 +56,9 @@ async function testCommandNamesAndArguments() {
   assert.strictEqual((await bridge.fetchTelemetryProbe('1.2.3.4')).azureRtt, 41.5);
   assert.deepStrictEqual(calls.pop(), ['probe_telemetry', { customHost: '1.2.3.4' }]);
 
+
+  assert.strictEqual((await bridge.detectSessionPeers())[0].ip, '13.104.105.250');
+  assert.deepStrictEqual(calls.pop(), ['detect_session_peers', {}]);
 
   await bridge.fetchHistorySeries(24);
   assert.deepStrictEqual(calls.pop(), ['history_series', { windowHours: 24 }]);

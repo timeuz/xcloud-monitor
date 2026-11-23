@@ -1,6 +1,6 @@
 [package]
 name = "xcloud-cyber-monitor"
-version = "1.1.0"
+version = "1.2.0"
 description = "Monitor de telemetria e diagnóstico de rede para Xbox Cloud Gaming no Brasil"
 authors = ["timeuz <10673085+timeuz@users.noreply.github.com>"]
 license = "MIT"
