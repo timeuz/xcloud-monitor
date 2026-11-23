@@ -7,7 +7,6 @@ import {
   GamingRank,
 } from './types/telemetry';
 import { NetworkMap2D } from './components/NetworkMap2D';
-import { RobotMascot } from './components/RobotMascot';
 import { VerdictBanner } from './components/VerdictBanner';
 import { TelemetryGauges } from './components/TelemetryGauges';
 import { StrategicMatrix } from './components/StrategicMatrix';
@@ -24,6 +23,7 @@ import {
   fetchTelemetryProbe,
   executeBufferbloatTest,
   fetchTracerouteReport,
+  fetchAppVersion,
   isTauriApp,
 } from './services/nativeBridge';
 import {
@@ -35,46 +35,43 @@ import {
   RefreshCw,
   Compass,
   Sliders,
-  Globe,
   Radio,
   Settings,
 } from 'lucide-react';
 
 function Dashboard() {
   // Navigation & View Tab State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'route' | 'servers' | 'history' | 'globe'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'route' | 'servers' | 'history'>('dashboard');
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [aiRefreshTrigger, setAiRefreshTrigger] = useState(0);
+  const [appVersion, setAppVersion] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isTestingBufferbloat, setIsTestingBufferbloat] = useState(false);
   const [activeSimulation, setActiveSimulation] = useState<string | null>(null);
 
   // Core Metrics State
   const [metrics, setMetrics] = useState<NetworkMetrics>({
-    rttMs: 35.4,
-    rttAvgMs: 35.4,
-    smoothedRttMs: 35.4,
-    jitterMs: 0.15,
-    smoothedJitterMs: 0.15,
-    packetLossPct: 0.0,
-    bufferbloatDeltaMs: 1.8,
-    samplesSent: 12,
+    // Placeholders only: nothing is shown until the first real probe answers (see hasMeasurement)
+    rttMs: 0,
+    rttAvgMs: 0,
+    jitterMs: 0,
+    packetLossPct: 0,
+    bufferbloatDeltaMs: null,
+    samplesSent: 0,
     samplesLost: 0,
-    isWifi24Ghz: false,
-    ttlHops: 5,
-    decodeTimeMs: 4.2,
   });
+  const [hasMeasurement, setHasMeasurement] = useState(false);
+  const hasSampleRef = useRef(false);
 
-  const [rttHistory, setRttHistory] = useState<number[]>([35.4, 35.6, 35.3, 35.5, 35.4, 35.2, 35.4]);
-  const [jitterHistory, setJitterHistory] = useState<number[]>([0.2, 0.15, 0.18, 0.14, 0.15, 0.12, 0.15]);
-  const [lossHistory, setLossHistory] = useState<number[]>([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+  const [rttHistory, setRttHistory] = useState<number[]>([]);
+  const [jitterHistory, setJitterHistory] = useState<number[]>([]);
+  const [lossHistory, setLossHistory] = useState<number[]>([]);
 
   // Resilient Statistical Filtering, Sliding Window & Confirmation Refs
   // Rolling window of probe outcomes (1 = no answer) used to compute real packet loss
   const lossWindowRef = useRef<number[]>([]);
-  const rttWindowRef = useRef<number[]>([35.4, 35.6, 35.3, 35.5, 35.4, 35.2, 35.4]);
-  const jitterWindowRef = useRef<number[]>([0.2, 0.15, 0.18, 0.14, 0.15, 0.12, 0.15]);
+  const rttWindowRef = useRef<number[]>([]);
+  const jitterWindowRef = useRef<number[]>([]);
   const confirmedHairpinningRef = useRef(false);
   const consecutiveHairpinningCountRef = useRef(0);
   const consecutiveNormalCountRef = useRef(0);
@@ -89,7 +86,7 @@ function Dashboard() {
 
   // Traceroute State
   const [traceroute, setTraceroute] = useState<TracerouteReport>({
-    target: '191.235.228.36 (xCloud Cluster Brasil Sul)',
+    target: 'xCloud (entrada)',
     isHairpinning: false,
     hopCount: 0,
     hops: [],
@@ -162,7 +159,14 @@ function Dashboard() {
             return;
           }
           const liveRtt = measuredRtt;
-          setMetrics((prev) => {
+          // The first answer seeds the filters: nothing invented is blended into real measurements.
+          const first = !hasSampleRef.current;
+          hasSampleRef.current = true;
+          setHasMeasurement(true);
+          setMetrics((current) => {
+            const prev: NetworkMetrics = first
+              ? { ...current, rttMs: liveRtt, rttAvgMs: liveRtt, smoothedRttMs: liveRtt, jitterMs: 0, smoothedJitterMs: 0 }
+              : current;
             const nextSent = prev.samplesSent + 1;
             const nextAvg = (prev.rttAvgMs * prev.samplesSent + liveRtt) / nextSent;
             // RFC 3550 EWMA Jitter
@@ -226,11 +230,10 @@ function Dashboard() {
 
             // Target rank evaluation using stateful hysteresis
             const rawTargetRank = rawRankWithHysteresis(
-              stableRank,
+              first ? 'A' : stableRank,
               nextSmoothedRtt,
               nextSmoothedJitter,
               prev.packetLossPct,
-              prev.isWifi24Ghz,
               prev.bufferbloatDeltaMs,
               confirmedHairpinningRef.current
             );
@@ -246,7 +249,10 @@ function Dashboard() {
             const isUpgrade = RANK_VALS[rawTargetRank] > RANK_VALS[stableRank];
             const requiredConfirmations = isUpgrade ? 4 : 3;
 
-            if (candidateRankRef.current.count >= requiredConfirmations) {
+            if (first) {
+              candidateRankRef.current = { rank: rawTargetRank, count: requiredConfirmations };
+              setStableRank(rawTargetRank);
+            } else if (candidateRankRef.current.count >= requiredConfirmations) {
               setStableRank(candidateRankRef.current.rank);
             }
 
@@ -278,6 +284,15 @@ function Dashboard() {
       isProbingRef.current = false;
     }
   }, [activeSimulation, metrics.jitterMs, metrics.packetLossPct, stableRank, traceroute.isHairpinning]);
+
+  useEffect(() => {
+    fetchAppVersion().then(setAppVersion).catch(() => {});
+    try {
+      localStorage.removeItem('xcloud_openai_api_key'); // key stored by older builds
+    } catch {
+      // storage unavailable
+    }
+  }, []);
 
   // Ensure the page stays at the very top on load and on tab switch
   useEffect(() => {
@@ -336,7 +351,7 @@ function Dashboard() {
         setCustomHostResult(data.customHost);
       }
     } catch (e) {
-      setCustomHostResult({ host, rttMs: 15.2, online: true });
+      setCustomHostResult({ host, rttMs: null, online: false });
     }
   };
 
@@ -346,6 +361,8 @@ function Dashboard() {
 
   // Simulation Levers - Sound triggers exclusively via verdict.rank transition effect
   const handleSimulateHairpinning = () => {
+    hasSampleRef.current = true;
+    setHasMeasurement(true);
     confirmedHairpinningRef.current = true;
     consecutiveHairpinningCountRef.current = 5;
     consecutiveNormalCountRef.current = 0;
@@ -358,7 +375,6 @@ function Dashboard() {
       smoothedRttMs: 138.4,
       jitterMs: 4.8,
       smoothedJitterMs: 4.8,
-      ttlHops: 7,
     }));
     setTraceroute((prev) => ({
       ...prev,
@@ -376,19 +392,9 @@ function Dashboard() {
     }));
   };
 
-  const handleSimulateWifi = () => {
-    setActiveSimulation('wifi');
-    setStableRank('B');
-    setMetrics((prev) => ({
-      ...prev,
-      isWifi24Ghz: true,
-      jitterMs: 18.6,
-      smoothedJitterMs: 18.6,
-      packetLossPct: 0.12,
-    }));
-  };
-
   const handleSimulateBufferbloat = () => {
+    hasSampleRef.current = true;
+    setHasMeasurement(true);
     setActiveSimulation('bufferbloat');
     setStableRank('B');
     setMetrics((prev) => ({
@@ -399,34 +405,20 @@ function Dashboard() {
 
 
   const handleResetNominal = () => {
-    rttWindowRef.current = [35.4, 35.6, 35.3, 35.5, 35.4, 35.2, 35.4];
-    jitterWindowRef.current = [0.2, 0.15, 0.18, 0.14, 0.15, 0.12, 0.15];
+    rttWindowRef.current = [];
+    jitterWindowRef.current = [];
+    lossWindowRef.current = [];
     confirmedHairpinningRef.current = false;
     consecutiveHairpinningCountRef.current = 0;
     consecutiveNormalCountRef.current = 0;
-    candidateRankRef.current = { rank: 'S', count: 5 };
+    candidateRankRef.current = { rank: 'S', count: 0 };
+    hasSampleRef.current = false;
+    setHasMeasurement(false);
     setActiveSimulation(null);
-    setStableRank('S');
-    setMetrics({
-      rttMs: 35.4,
-      rttAvgMs: 35.4,
-      smoothedRttMs: 35.4,
-      jitterMs: 0.15,
-      smoothedJitterMs: 0.15,
-      packetLossPct: 0.0,
-      bufferbloatDeltaMs: 1.8,
-      samplesSent: 24,
-      samplesLost: 0,
-      isWifi24Ghz: false,
-      ttlHops: 5,
-      decodeTimeMs: 4.1,
-      resilience: {
-        trend: 'ESTÁVEL',
-        stabilityScore: 98,
-        windowSampleCount: 7,
-        confirmedCycles: 5,
-      },
-    });
+    setRttHistory([]);
+    setJitterHistory([]);
+    setLossHistory([]);
+    setMetrics({ rttMs: 0, rttAvgMs: 0, jitterMs: 0, packetLossPct: 0, bufferbloatDeltaMs: null, samplesSent: 0, samplesLost: 0 });
     refreshTraceroute();
   };
 
@@ -505,18 +497,6 @@ function Dashboard() {
           >
             Histórico
           </button>
-          <button
-            onClick={() => {
-              setActiveTab('globe');
-            }}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'globe'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                : 'hover:text-slate-200'
-            }`}
-          >
-            Mapa de Rotas
-          </button>
         </nav>
 
         {/* Zone 3: Primary Actions */}
@@ -526,7 +506,7 @@ function Dashboard() {
               setIsSettingsOpen(true);
             }}
             className="p-2 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-800/40 transition-colors"
-            title="Configurações da Chave OpenAI"
+            title="Configurações"
           >
             <Settings className="w-4 h-4 text-cyan-400" />
           </button>
@@ -556,51 +536,44 @@ function Dashboard() {
         <UpdateBanner />
 
         {/* Top Direct Answers Banner */}
-        <VerdictBanner
-          verdict={verdict}
-          metrics={metrics}
-          isHairpinning={isHairpinning}
-        />
+        {hasMeasurement ? (
+          <VerdictBanner
+            verdict={verdict}
+            metrics={metrics}
+            isHairpinning={isHairpinning}
+            endpoints={endpoints}
+            traceroute={traceroute}
+          />
+        ) : (
+          <div className="rounded-xl border border-cyan-900/40 bg-[#06111a] p-6 text-center font-mono text-sm text-slate-400">
+            Medindo a conexão com o xCloud... o veredito aparece assim que o primeiro alvo responder.
+          </div>
+        )}
 
-        {/* Robot Mascot & 2D Tactical World Map Split */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-          <div className="lg:col-span-6 flex flex-col">
-            <RobotMascot
-              verdict={verdict}
-              metrics={metrics}
-                  isHairpinning={isHairpinning}
-              endpoints={endpoints}
-              traceroute={traceroute}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              refreshTrigger={aiRefreshTrigger}
-            />
-          </div>
-          <div className="lg:col-span-6 flex flex-col">
-            <NetworkMap2D
-              isHairpinning={isHairpinning}
-              rttMs={metrics.rttMs}
-              className="h-full min-h-[380px]"
-            />
-          </div>
-        </div>
+        <NetworkMap2D
+          isHairpinning={isHairpinning}
+          rttMs={metrics.rttMs}
+          className="min-h-[380px]"
+        />
 
         {/* Mathematical Network Gauges (RFC 3550 Jitter, RTT, Loss, Bufferbloat) */}
-        <TelemetryGauges
-          metrics={metrics}
-          rttHistory={rttHistory}
-          jitterHistory={jitterHistory}
-          lossHistory={lossHistory}
-          onTriggerBufferbloat={handleTriggerBufferbloat}
-          isTestingBufferbloat={isTestingBufferbloat}
-          bufferbloatNote={bufferbloatNote}
-        />
+        {hasMeasurement && (
+          <TelemetryGauges
+            metrics={metrics}
+            rttHistory={rttHistory}
+            jitterHistory={jitterHistory}
+            lossHistory={lossHistory}
+            onTriggerBufferbloat={handleTriggerBufferbloat}
+            isTestingBufferbloat={isTestingBufferbloat}
+            bufferbloatNote={bufferbloatNote}
+          />
+        )}
 
 
         {/* Simulation lab: injects fake metrics, so it only exists in dev builds */}
         {import.meta.env.DEV && (
           <SimulationControls
             onSimulateHairpinning={handleSimulateHairpinning}
-            onSimulateWifi={handleSimulateWifi}
             onSimulateBufferbloat={handleSimulateBufferbloat}
             onResetNominal={handleResetNominal}
             onTriggerBufferbloat={handleTriggerBufferbloat}
@@ -646,39 +619,11 @@ function Dashboard() {
         )}
 
         {activeTab === 'history' && <HistoryView />}
-
-        {activeTab === 'globe' && (
-          <div className="rounded-xl border border-cyan-900/40 bg-[#06111a] p-4 shadow-lg space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-cyan-900/30 gap-2">
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-cyan-400" />
-                <h3 className="text-sm font-bold font-mono tracking-wide text-slate-100 uppercase">
-                  MAPA TÁTICO DE ROTAS E CABOS SUBMARINOS // AS8075 & EUA
-                </h3>
-              </div>
-            </div>
-            <p className="text-xs text-slate-400">
-              Visualização de rotas com pacotes em tempo real. Observe o enlace submarino (Monet / Seabras-1) ligando o Brasil aos servidores de referência em Miami, Atlanta e Ashburn nos Estados Unidos. Passe o mouse ou clique sobre qualquer nó para inspecionar telemetria detalhada.
-            </p>
-            <NetworkMap2D
-              isHairpinning={isHairpinning}
-              rttMs={metrics.rttMs}
-              className="h-[520px]"
-            />
-          </div>
-        )}
       </main>
 
       {/* Footer */}
       <footer className="border-t border-cyan-950/60 bg-[#020508] px-4 py-4 text-center text-xs font-mono text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>
-            xCloud Cyber-Monitor · Desenvolvido com base na especificação técnica XCLOUD.md & r/xcloud
-          </span>
-          <span className="text-slate-400">
-            AS8075 Microsoft Borda Brasil · IX.br SP (AS26162) · Azure brazilsouth
-          </span>
-        </div>
+        xCloud Cyber-Monitor{appVersion ? ` · v${appVersion}` : ''}
       </footer>
 
       {/* Report Modal */}
@@ -691,12 +636,7 @@ function Dashboard() {
         verdict={verdict}
       />
 
-      {/* OpenAI Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        onKeySaved={() => setAiRefreshTrigger((prev) => prev + 1)}
-      />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }

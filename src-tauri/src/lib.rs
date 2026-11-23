@@ -1,4 +1,4 @@
-mod ai;
+mod legacy;
 mod bufferbloat;
 mod desktop;
 mod analysis;
@@ -23,7 +23,12 @@ fn is_desktop_native() -> bool {
 async fn probe_telemetry(custom_host: Option<String>) -> Result<TelemetryProbeResponse, String> {
     // Run CPU/blocking network probes off the main async reactor
     let result = tauri::async_runtime::spawn_blocking(move || {
-        probe_all_strategic(custom_host)
+        let mut probe = probe_all_strategic(custom_host);
+        // own router and first ISP hop, taken from the last traceroute (none until one ran)
+        if let Some((gw, isp)) = route::path_probe_targets() {
+            probe.endpoints.extend(network::probe_path_points(&gw, isp.as_deref()));
+        }
+        probe
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -99,6 +104,7 @@ pub fn run() {
                 });
             app.manage(history);
             history::spawn_sampler(app.handle().clone());
+            legacy::purge_openai_key();
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -129,10 +135,6 @@ pub fn run() {
             probe_single_host,
             run_bufferbloat,
             route::run_traceroute,
-            ai::ai_status,
-            ai::ai_verify,
-            ai::ai_save_key,
-            ai::ai_chat,
             history::history_stats,
             history::history_analysis,
             history::history_series,

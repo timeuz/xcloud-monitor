@@ -16,9 +16,6 @@ const metrics = (over: Partial<NetworkMetrics> = {}): NetworkMetrics => ({
   bufferbloatDeltaMs: 4,
   samplesSent: 100,
   samplesLost: 0,
-  isWifi24Ghz: false,
-  ttlHops: 6,
-  decodeTimeMs: 4,
   ...over,
 });
 
@@ -61,7 +58,7 @@ let currentRank: GamingRank = 'B';
 const noisyPings = [64.0, 68.0, 63.5, 67.5, 65.0, 69.0, 64.5];
 const rankHistory: string[] = [];
 for (const p of noisyPings) {
-  currentRank = rawRankWithHysteresis(currentRank, p, 1.2, 0, false, 5, false);
+  currentRank = rawRankWithHysteresis(currentRank, p, 1.2, 0, 5, false);
   rankHistory.push(currentRank);
 }
 console.log('Rank history under noisy 63-69ms pings:', rankHistory);
@@ -69,10 +66,10 @@ assert(rankHistory.every((r) => r === 'B'), 'Deadband must prevent flapping');
 console.log('Confirmed: 0 rank flip-flops observed in the 63-69ms region.');
 
 console.log('\n--- TEST 5: Latency-First Golden Rule (Never declares ótimo on high latency) ---');
-assert.strictEqual(rawRankWithHysteresis('B', 78, 1.2, 0, false, 4, false), 'F', 'RTT of 78ms must be Rank F');
-assert.strictEqual(rawRankWithHysteresis('A', 52, 1.2, 0, false, 4, false), 'B', 'RTT of 52ms must be Rank B, never A or S');
-assert.strictEqual(rawRankWithHysteresis('S', 36, 1.2, 0, false, 4, true), 'F', 'a detour forces F');
-assert.strictEqual(rawRankWithHysteresis('F', 60, 1.2, 0, false, 4, false), 'B', 'F recovers below 68 ms');
+assert.strictEqual(rawRankWithHysteresis('B', 78, 1.2, 0, 4, false), 'F', 'RTT of 78ms must be Rank F');
+assert.strictEqual(rawRankWithHysteresis('A', 52, 1.2, 0, 4, false), 'B', 'RTT of 52ms must be Rank B, never A or S');
+assert.strictEqual(rawRankWithHysteresis('S', 36, 1.2, 0, 4, true), 'F', 'a detour forces F');
+assert.strictEqual(rawRankWithHysteresis('F', 60, 1.2, 0, 4, false), 'B', 'F recovers below 68 ms');
 
 console.log('\n--- TEST 6: The verdict never calls a slow connection good because the cloud answers ---');
 const slow = computeVerdict({
@@ -92,10 +89,13 @@ assert.strictEqual(detour.rank, 'F');
 assert.strictEqual(detour.isGoodTimeToPlay, false);
 assert.ok(detour.headline.includes('Hairpinning'), detour.headline);
 
-const wifi = computeVerdict({ metrics: metrics({ isWifi24Ghz: true, jitterMs: 12, smoothedJitterMs: 12 }), isHairpinning: false });
-assert.strictEqual(wifi.rootCauseCategory, 'LOCAL_CONNECTION');
 const bloat = computeVerdict({ metrics: metrics({ bufferbloatDeltaMs: 70 }), isHairpinning: false });
 assert.strictEqual(bloat.rank, 'B');
-console.log('Confirmed: latency first; detour, Wi-Fi and bufferbloat are attributed to the right cause.');
+console.log('Confirmed: latency first; detour and bufferbloat are attributed to the right cause.');
 
 console.log('\n✅ ALL RESILIENCE TESTS PASSED SUCCESSFULLY!');
+
+console.log('\n--- TEST 7: no bufferbloat test means no evidence, in either direction ---');
+assert.strictEqual(rawRankWithHysteresis('A', 30, 1, 0, null, false), 'S', 'untested bufferbloat must not block a good rank');
+assert.strictEqual(computeVerdict({ metrics: metrics({ bufferbloatDeltaMs: null }), isHairpinning: false }).rank === 'F', false);
+console.log('Confirmed.');

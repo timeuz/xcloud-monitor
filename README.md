@@ -18,7 +18,6 @@ Guarda o histórico só no seu computador e gera um **relatório de evidência**
   compara com o servidor de entrada do xCloud.
 - **Bufferbloat de verdade:** satura o download e depois o upload enquanto mede a latência (nota A+ a F, vazão, latência do
   roteador sob carga). Pede confirmação: usa até ~330 MB e conecta à Cloudflare.
-- **Copiloto de IA (opcional)**, com a sua chave da OpenAI guardada no cofre do sistema.
 
 ## O que ele conclui
 
@@ -32,10 +31,8 @@ de dados do roteador. Em **Histórico** há gráficos, achados e o botão **Rela
 | Dado | Onde fica |
 |---|---|
 | Medições (SQLite) | `br.com.xcloud.cybermonitor/history.sqlite` na pasta de dados do app (Linux `~/.local/share`, macOS `~/Library/Application Support`, Windows `%APPDATA%`). Amostras brutas por 14 dias, resumos por hora por 365 dias. Dá para pausar a coleta, exportar CSV e apagar tudo em Configurações. |
-| Chave da OpenAI | Cofre do sistema (Secret Service / Keychain / Credential Manager), nunca em arquivo. |
 
-Sai da máquina: sondagens ICMP/TCP aos alvos; **Cloudflare** só durante o teste de bufferbloat, que você confirma; **OpenAI**
-só quando você usa o chat (sua mensagem e as métricas atuais); **GitHub** na verificação de atualizações.
+Sai da máquina: sondagens ICMP/TCP aos alvos; **Cloudflare** só durante o teste de bufferbloat, que você confirma; **GitHub** na verificação de atualizações.
 
 ## Usando
 
@@ -70,7 +67,6 @@ Front (React 19, Vite, Tailwind 4, SVG puro) ⟷ comandos Tauri ⟷ backend Rust
 | `analysis` | motor determinístico: picos, episódios, causa |
 | `report` | relatório de evidência em HTML |
 | `bufferbloat` | teste com saturação real |
-| `ai` | copiloto |
 | `desktop`, `updater` | bandeja, instância única, autostart, atualização assinada |
 
 Um teste de contrato garante que todo comando chamado pelo front existe no Rust com os mesmos nomes de argumento.

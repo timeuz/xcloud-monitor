@@ -90,12 +90,15 @@ export const TelemetryGauges: React.FC<TelemetryGaugesProps> = ({
   const rttQ = classifyQuality('rtt', metrics.rttMs);
   const jitterQ = classifyQuality('jitter', metrics.jitterMs);
   const lossQ = classifyQuality('loss', metrics.packetLossPct);
-  const bloatQ = classifyQuality('bufferbloat', metrics.bufferbloatDeltaMs);
+  const bloat = metrics.bufferbloatDeltaMs;
+  const bloatQ: ConnectionQuality | null = bloat == null ? null : classifyQuality('bufferbloat', bloat);
 
   const rttTheme = getQualityColor(rttQ);
   const jitterTheme = getQualityColor(jitterQ);
   const lossTheme = getQualityColor(lossQ);
-  const bloatTheme = getQualityColor(bloatQ);
+  const bloatTheme = bloatQ == null
+    ? { text: 'text-slate-400', border: 'border-cyan-900/40', bg: 'bg-slate-600', pill: 'bg-slate-900 text-slate-400 border-slate-700' }
+    : getQualityColor(bloatQ);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3.5">
@@ -240,19 +243,19 @@ export const TelemetryGauges: React.FC<TelemetryGaugesProps> = ({
           <div className="mt-3 flex items-baseline justify-between">
             <div className="flex items-baseline gap-1">
               <span className={`text-3xl font-extrabold font-mono tabular-nums ${bloatTheme.text}`}>
-                +{metrics.bufferbloatDeltaMs.toFixed(1)}
+                {bloat == null ? '—' : `+${bloat.toFixed(1)}`}
               </span>
-              <span className="text-xs text-slate-400 font-mono">ms</span>
+              <span className="text-xs text-slate-400 font-mono">{bloat == null ? 'não testado' : 'ms'}</span>
             </div>
             <span className={`text-xs font-mono px-2 py-0.5 rounded border ${bloatTheme.pill}`}>
-              {bloatQ}
+              {bloatQ ?? 'NÃO TESTADO'}
             </span>
           </div>
 
           <div className="w-full h-1.5 bg-slate-800 rounded-full mt-3 overflow-hidden">
             <div
               className={`h-full ${bloatTheme.bg} transition-all duration-300`}
-              style={{ width: `${Math.min(100, (metrics.bufferbloatDeltaMs / 60) * 100)}%` }}
+              style={{ width: `${Math.min(100, ((bloat ?? 0) / 60) * 100)}%` }}
             />
           </div>
         </div>

@@ -11,10 +11,11 @@ export function rawRankWithHysteresis(
     rtt: number,
     jitter: number,
     loss: number,
-    isWifi24: boolean,
-    bloat: number,
+    bloatMs: number | null,
     hairpin: boolean
 ): GamingRank {
+  // no bufferbloat test yet = no evidence, not a good or a bad score
+  const bloat = bloatMs ?? 0;
   // 1. Critical Hard Fault: Hairpinning always forces F
   if (hairpin) return 'F';
 
@@ -35,14 +36,14 @@ export function rawRankWithHysteresis(
   // 3. Rank B State Hysteresis (Atenção)
   if (currentStable === 'B') {
     // Promotion to A requires dropping cleanly below 45ms RTT
-    if (!isWifi24 && rtt < 45.0 && jitter < 5.0 && bloat <= 35.0) {
+    if (rtt < 45.0 && jitter < 5.0 && bloat <= 35.0) {
       return 'A';
     }
     return 'B';
   }
 
   // Drop into B from A or S requires exceeding 50ms RTT or high jitter
-  if (rtt >= 50.0 || isWifi24 || jitter >= 7.0 || bloat > 40.0) {
+  if (rtt >= 50.0 || jitter >= 7.0 || bloat > 40.0) {
     return 'B';
   }
 
@@ -104,22 +105,8 @@ export function computeVerdict({ metrics, isHairpinning }: VerdictInput): Gaming
     };
   }
 
-  // 3. Wi-Fi 2.4GHz Instability (Local Connection Fault)
-  if (metrics.isWifi24Ghz && effectiveJitter > 8.0) {
-    return {
-      rank: 'B',
-      headline: 'ATENÇÃO: Instabilidade no Meio Sem Fio Local (Wi-Fi 2.4 GHz)',
-      isGoodTimeToPlay: false,
-      statusText: 'Micro-travamentos e frame drops visíveis causados por interferência no canal de 2.4 GHz.',
-      rootCauseCategory: 'LOCAL_CONNECTION',
-      rootCauseTitle: 'Interferência Eletromagnética Local (Wi-Fi 2.4GHz)',
-      rootCauseDescription: 'A latência base pode estar razoável, mas o jitter elevado na rede local faz com que os quadros de vídeo cheguem descompassados.',
-      actionableTip: 'Conecte um cabo Ethernet (RJ45) ou migre seu dispositivo para a rede Wi-Fi de 5 GHz ou 6 GHz a curta distância.',
-    };
-  }
-
-  // 4. Bufferbloat (Local Router Queue Saturation)
-  if (metrics.bufferbloatDeltaMs > 45.0) {
+  // 3. Bufferbloat (Local Router Queue Saturation)
+  if (metrics.bufferbloatDeltaMs != null && metrics.bufferbloatDeltaMs > 45.0) {
     return {
       rank: 'B',
       headline: 'ATENÇÃO: Saturação de Bufferbloat no Roteador Residencial',
@@ -132,7 +119,7 @@ export function computeVerdict({ metrics, isHairpinning }: VerdictInput): Gaming
     };
   }
 
-  // 5. Borderline / Moderate Latency (45ms to 65ms)
+  // 4. Borderline / Moderate Latency (45ms to 65ms)
   if (effectiveRtt >= 45.0) {
     return {
       rank: 'B',
@@ -146,7 +133,7 @@ export function computeVerdict({ metrics, isHairpinning }: VerdictInput): Gaming
     };
   }
 
-  // 6. Nominal State: Rank S (Peak Console Feel) or Rank A (Excellent)
+  // 5. Nominal State: Rank S (Peak Console Feel) or Rank A (Excellent)
   if (effectiveRtt < 22.0 && effectiveJitter < 2.5 && metrics.packetLossPct === 0.0) {
     return {
       rank: 'S',
