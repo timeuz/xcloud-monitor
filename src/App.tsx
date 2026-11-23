@@ -629,10 +629,12 @@ function Dashboard() {
               playUiClick();
               setIsReportOpen(true);
             }}
-            className="px-3.5 py-1.5 text-xs font-mono font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black transition-colors whitespace-nowrap shadow-sm flex items-center gap-1.5"
+            className="p-2 xl:px-3.5 xl:py-1.5 text-xs font-mono font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black transition-colors whitespace-nowrap shadow-sm flex items-center gap-1.5"
+            title="Exportar Chamado ISP"
+            aria-label="Exportar Chamado ISP"
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Exportar Chamado ISP</span>
+            <FileText className="w-4 h-4 xl:w-3.5 xl:h-3.5" />
+            <span className="hidden xl:inline">Exportar Chamado ISP</span>
           </button>
         </div>
       </header>

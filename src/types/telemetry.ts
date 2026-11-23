@@ -108,6 +108,8 @@ export interface CoPilotMessage {
 }
 
 export interface LiveGameQueue {
+  /** false when no game is selected and the account has no play history. */
+  hasTitle?: boolean;
   titleId: string;
   titleName: string;
   productId?: string;

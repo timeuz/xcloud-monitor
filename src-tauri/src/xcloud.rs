@@ -288,7 +288,26 @@ pub async fn xcloud_active_game(title_id: Option<String>) -> Value {
             }
         }
     }
-    let title_id = target_title.unwrap_or_else(|| "NOMANSSKY".to_string());
+    // No selected title and no play history: report that instead of inventing a game.
+    let Some(title_id) = target_title else {
+        return json!({
+            "ok": true,
+            "connected": true,
+            "hasTitle": false,
+            "isCurrentlyPlaying": false,
+            "titleId": "",
+            "titleName": "",
+            "estimatedWaitSeconds": 0,
+            "estimatedWaitMinutes": 0,
+            "provisioningSeconds": 0,
+            "allocationSeconds": 0,
+            "gamertag": session.gamertag,
+            "gamerpic": session.gamerpic,
+            "region": REGION_LABEL,
+            "source": "xstreaming_live",
+            "updatedAt": now_ms(),
+        });
+    };
 
     let wait = fetch_wait_times(&session, &title_id).await;
 
@@ -309,6 +328,7 @@ pub async fn xcloud_active_game(title_id: Option<String>) -> Value {
     json!({
         "ok": true,
         "connected": true,
+        "hasTitle": true,
         "isCurrentlyPlaying": playing,
         "titleId": title_id,
         "titleName": title_name,

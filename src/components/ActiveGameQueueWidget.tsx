@@ -159,6 +159,7 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
   const seconds = remainingSeconds ?? activeQueue?.estimatedWaitSeconds ?? 0;
   const isHighQueue = seconds > 300;
   const isImmediate = seconds <= 15;
+  const hasTitle = activeQueue ? activeQueue.hasTitle !== false : false;
   const isPlaying = userDeclaredPlaying !== null
     ? userDeclaredPlaying
     : Boolean(activeQueue?.isCurrentlyPlaying);
@@ -257,7 +258,7 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/70 border border-cyan-800/40 text-cyan-300 uppercase tracking-wider">
                   Jogo no xStreaming
                 </span>
-                {isPlaying ? (
+                {!hasTitle && !isPlaying ? null : isPlaying ? (
                   <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.3)]">
                     <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                     VOCÊ JÁ ESTÁ CONECTADO
@@ -290,14 +291,18 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
               </div>
 
               <h4 className="text-xl font-extrabold text-slate-100 tracking-tight truncate">
-                {activeQueue?.titleName || 'Carregando jogo...'}
+                {hasTitle
+                  ? activeQueue?.titleName
+                  : activeQueue
+                  ? 'Nenhum jogo selecionado'
+                  : 'Carregando jogo...'}
               </h4>
 
               <div className="text-xs font-mono text-slate-400 flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1">
                 <span>
                   ID:{' '}
                   <span className="text-cyan-300 font-semibold">
-                    {activeQueue?.titleId || '---'}
+                    {hasTitle ? activeQueue?.titleId : '---'}
                   </span>
                 </span>
                 <span>
@@ -321,7 +326,14 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
                 </div>
               )}
 
+              {!hasTitle && !isPlaying && activeQueue && (
+                <p className="text-xs font-mono text-slate-400">
+                  Busque um jogo ao lado para consultar a fila.
+                </p>
+              )}
+
               {/* Digital Countdown Clock */}
+              {(hasTitle || isPlaying) && (
               <div className="pt-2">
                 <div className="flex items-baseline justify-center sm:justify-start gap-3">
                   <div className="text-4xl sm:text-5xl font-black font-mono tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 drop-shadow-[0_0_15px_rgba(0,229,255,0.4)]">
@@ -341,10 +353,12 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
                   </div>
                 </div>
               </div>
+              )}
             </div>
           </div>
 
           {/* Allocation Progress Bar */}
+          {(hasTitle || isPlaying) && (
           <div className="space-y-1.5 pt-2 border-t border-cyan-950/60">
             <div className="flex items-center justify-between text-[11px] font-mono">
               <span className="text-slate-400 flex items-center gap-1">
@@ -376,6 +390,7 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
               />
             </div>
           </div>
+          )}
 
           {/* Quick-Switch Recent Games Pills */}
           {recentGames.length > 0 && (

@@ -72,11 +72,11 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
             </span>
           </div>
 
-          <div className="mt-2.5">
+          <div className="mt-3">
             <h3 className={`text-lg font-bold ${theme.text}`}>
               {verdict.headline}
             </h3>
-            <p className="text-xs text-slate-300 mt-1">
+            <p className="text-[11px] font-mono leading-relaxed text-slate-400 mt-1.5">
               {theme.sub}
             </p>
           </div>
@@ -115,7 +115,7 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
             </span>
           </div>
 
-          <div className="mt-2.5 space-y-1.5">
+          <div className="mt-3 space-y-2.5 leading-relaxed">
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-slate-400 flex items-center gap-1">
                 <Gauge className="w-3.5 h-3.5 text-slate-400" /> Latência RTT:
@@ -153,7 +153,7 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
           </div>
         </div>
 
-        <div className="mt-3 pt-3 border-t border-cyan-900/30 text-xs">
+        <div className="mt-3 pt-3 border-t border-cyan-900/30 text-[11px] font-mono leading-relaxed">
           <span className="text-slate-400">Origem: </span>
           <span className="font-semibold text-slate-200">
             {verdict.rootCauseCategory === 'LOCAL_CONNECTION'
@@ -188,22 +188,22 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
 
           <div className="mt-2.5">
             {isHairpinning ? (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <div className="text-sm font-bold text-red-400 flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-red-400" />
                   <span>Desvio Internacional (Hairpinning)</span>
                 </div>
-                <p className="text-xs text-slate-300">
+                <p className="text-[11px] font-mono leading-relaxed text-slate-400">
                   Seus dados viajam para os EUA (Miami/Atlanta) antes de chegar a São Paulo. A culpa é do roteamento da sua operadora!
                 </p>
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <div className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   <span>Roteamento Direto via IX.br SP</span>
                 </div>
-                <p className="text-xs text-slate-300">
+                <p className="text-[11px] font-mono leading-relaxed text-slate-400">
                   Tráfego entregue no Ponto de Troca de Tráfego de São Paulo (AS8075). Rota ótima com menor número de saltos.
                 </p>
               </div>
