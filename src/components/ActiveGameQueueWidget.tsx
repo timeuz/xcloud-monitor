@@ -33,6 +33,7 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<XCloudGameSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedGameWait, setSelectedGameWait] = useState<{ titleId: string; titleName: string; waitSeconds: number; waitMinutes: number; posterUrl?: string } | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [userDeclaredPlaying, setUserDeclaredPlaying] = useState<boolean | null>(null);
@@ -104,6 +105,7 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
   useEffect(() => {
     if (!searchQuery || searchQuery.trim().length < 2) {
       setSearchResults([]);
+      setSearchError(null);
       return;
     }
 
@@ -112,8 +114,11 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
       try {
         const results = await searchXCloudGames(searchQuery);
         setSearchResults(results);
+        setSearchError(null);
       } catch (err) {
         console.warn('Search games error:', err);
+        setSearchResults([]);
+        setSearchError(err instanceof Error ? err.message : String(err));
       } finally {
         setIsSearching(false);
       }
@@ -474,6 +479,10 @@ export function ActiveGameQueueWidget({ onQueueUpdated, className = '' }: Active
                     </span>
                   </button>
                 ))}
+              </div>
+            ) : searchError ? (
+              <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-950/20 text-xs font-mono text-amber-200 leading-relaxed">
+                {searchError}
               </div>
             ) : searchQuery.length >= 2 && !isSearching ? (
               <div className="p-3 text-center text-xs font-mono text-slate-500">

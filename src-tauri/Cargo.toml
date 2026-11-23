@@ -1,8 +1,8 @@
 [package]
 name = "app"
-version = "1.0.1"
+version = "1.0.2"
 description = "Monitor de telemetria e diagnóstico de rede para Xbox Cloud Gaming no Brasil"
-authors = ["timeuz"]
+authors = ["timeuz <10673085+timeuz@users.noreply.github.com>"]
 license = "MIT"
 repository = "https://github.com/timeuz/xcloud-monitor"
 edition = "2024"

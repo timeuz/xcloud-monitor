@@ -20,15 +20,23 @@ pub struct UpdateInfo {
     pub current_version: String,
     pub version: String,
     pub notes: Option<String>,
-    /// false when the app cannot replace itself (Linux outside an AppImage): the UI then points to the release page.
+    /// false when the app cannot replace itself (Linux outside an AppImage or a system package): the UI then points to the release page.
     pub installable: bool,
 }
 
-/// On Linux only AppImage installs can update in place; .deb/.rpm are managed by the package manager.
+/// True when `exe` sits in a system prefix, i.e. it was installed by a .deb/.rpm package.
+#[cfg(any(target_os = "linux", test))]
+fn is_system_package_path(exe: &std::path::Path) -> bool {
+    exe.starts_with("/usr/") && !exe.starts_with("/usr/local/")
+}
+
+/// Linux updates in place from an AppImage, or from a .deb/.rpm through the plugin's pkexec install
+/// (a graphical password prompt). A bare binary, such as `tauri dev`, cannot replace itself.
 pub fn can_self_update() -> bool {
     #[cfg(target_os = "linux")]
     {
         std::env::var_os("APPIMAGE").is_some()
+            || std::env::current_exe().map(|p| is_system_package_path(&p)).unwrap_or(false)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -137,5 +145,18 @@ mod tests {
         .unwrap();
         assert_eq!(v["currentVersion"], "1.0.0");
         assert_eq!(v["installable"], true);
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::is_system_package_path;
+    use std::path::Path;
+
+    #[test]
+    fn detects_package_installs() {
+        assert!(is_system_package_path(Path::new("/usr/bin/app")));
+        assert!(!is_system_package_path(Path::new("/usr/local/bin/app")));
+        assert!(!is_system_package_path(Path::new("/home/u/xcloud/target/debug/app")));
     }
 }
