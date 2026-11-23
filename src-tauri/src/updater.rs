@@ -98,6 +98,52 @@ pub async fn update_install(app: AppHandle) -> Result<(), String> {
         .download_and_install(|_chunk, _total| {}, || {})
         .await
         .map_err(|e| format!("Falha ao instalar a atualização: {e}"))?;
+    relaunch(&app)
+}
+
+/// Strips the " (deleted)" suffix Linux appends to /proc/self/exe once a package upgrade has replaced the
+/// file, and falls back to the packaged binary when the old path no longer exists.
+#[cfg(any(target_os = "linux", test))]
+fn resolve_relaunch_path(exe: &std::path::Path, exists: impl Fn(&std::path::Path) -> bool) -> std::path::PathBuf {
+    let text = exe.to_string_lossy();
+    let cleaned = std::path::PathBuf::from(text.strip_suffix(" (deleted)").unwrap_or(&text).to_string());
+    if exists(&cleaned) {
+        return cleaned;
+    }
+    let packaged = std::path::PathBuf::from("/usr/bin/xcloud-cyber-monitor");
+    if exists(&packaged) { packaged } else { cleaned }
+}
+
+/// Linux: `app.restart()` starts the new process before this one has exited, and the single-instance
+/// plugin then makes the new one quit because the old one still holds the lock: nothing is left running.
+/// A short delayed shell relaunch lets this process exit first.
+#[cfg(target_os = "linux")]
+fn relaunch(app: &AppHandle) -> Result<(), String> {
+    let target = match std::env::var_os("APPIMAGE") {
+        Some(p) => std::path::PathBuf::from(p),
+        None => {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            resolve_relaunch_path(&exe, |p| p.exists())
+        }
+    };
+    let spawned = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("sleep 2; exec \"$0\"")
+        .arg(&target)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    if let Err(e) = spawned {
+        log::error!("could not schedule the relaunch: {e}");
+        app.restart();
+    }
+    app.exit(0);
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn relaunch(app: &AppHandle) -> Result<(), String> {
     app.restart()
 }
 
@@ -150,7 +196,7 @@ mod tests {
 
 #[cfg(test)]
 mod path_tests {
-    use super::is_system_package_path;
+    use super::{is_system_package_path, resolve_relaunch_path};
     use std::path::Path;
 
     #[test]
@@ -158,5 +204,13 @@ mod path_tests {
         assert!(is_system_package_path(Path::new("/usr/bin/app")));
         assert!(!is_system_package_path(Path::new("/usr/local/bin/app")));
         assert!(!is_system_package_path(Path::new("/home/u/xcloud/target/debug/app")));
+    }
+
+    #[test]
+    fn relaunch_path_survives_an_upgrade() {
+        let exists = |p: &Path| p == Path::new("/usr/bin/xcloud-cyber-monitor");
+        assert_eq!(resolve_relaunch_path(Path::new("/usr/bin/xcloud-cyber-monitor (deleted)"), exists), Path::new("/usr/bin/xcloud-cyber-monitor"));
+        assert_eq!(resolve_relaunch_path(Path::new("/usr/bin/app"), exists), Path::new("/usr/bin/xcloud-cyber-monitor"), "binary renamed by the upgrade");
+        assert_eq!(resolve_relaunch_path(Path::new("/opt/x/app"), |_| false), Path::new("/opt/x/app"));
     }
 }
