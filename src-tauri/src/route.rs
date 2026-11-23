@@ -259,6 +259,7 @@ fn location_label(hop: &ParsedHop, analysis: &Analysis) -> String {
     "Internet pública".into()
 }
 
+#[cfg(test)]
 pub fn build_response(parsed: Vec<ParsedHop>, source: &str) -> TracerouteResponse {
     build_response_for(parsed, source, TRACE_TARGET.parse().expect("valid target"), TRACE_TARGET_LABEL.into())
 }

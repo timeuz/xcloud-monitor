@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.0.0"
+version = "1.0.1"
 description = "Monitor de telemetria e diagnóstico de rede para Xbox Cloud Gaming no Brasil"
 authors = ["timeuz"]
 license = "MIT"

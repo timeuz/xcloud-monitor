@@ -527,11 +527,6 @@ function Dashboard() {
             </div>
             <div className="flex items-center gap-1.5 text-[10px] font-mono text-cyan-400">
               <span>AS8075 · brazilsouth · IX.br SP</span>
-              {isTauriApp() && (
-                <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold tracking-wider">
-                  DESKTOP TAURI v2
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -629,10 +624,12 @@ function Dashboard() {
               playUiClick();
               setIsReportOpen(true);
             }}
-            className="px-3.5 py-1.5 text-xs font-mono font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black transition-colors whitespace-nowrap shadow-sm flex items-center gap-1.5"
+            className="p-2 xl:px-3.5 xl:py-1.5 text-xs font-mono font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black transition-colors whitespace-nowrap shadow-sm flex items-center gap-1.5"
+            title="Exportar Chamado ISP"
+            aria-label="Exportar Chamado ISP"
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Exportar Chamado ISP</span>
+            <FileText className="w-4 h-4 xl:w-3.5 xl:h-3.5" />
+            <span className="hidden xl:inline">Exportar Chamado ISP</span>
           </button>
         </div>
       </header>
