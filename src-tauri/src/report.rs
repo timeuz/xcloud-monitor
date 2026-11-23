@@ -41,6 +41,7 @@ pub struct BloatDetail {
 pub struct Extras {
     pub routes: Vec<RouteRunDetail>,
     pub bloats: Vec<BloatDetail>,
+    pub udp: Vec<crate::history::UdpRunRow>,
     pub stats: HistoryStats,
 }
 
@@ -326,6 +327,31 @@ fn jumps_html(run: &RouteRunDetail) -> String {
     )
 }
 
+fn udp_html(runs: &[crate::history::UdpRunRow], tz: i32) -> String {
+    if runs.is_empty() {
+        return "<p>Nenhum teste UDP realizado no período.</p>".into();
+    }
+    let rows = runs
+        .iter()
+        .map(|r| {
+            vec![
+                esc(&fmt_local(r.ts, tz)),
+                esc(&r.label),
+                format!("{} / {}", r.received, r.sent),
+                format!("{:.1}%", r.loss_pct),
+                r.max_burst.to_string(),
+                ms(r.rtt_p50),
+                ms(r.rtt_p95),
+                ms(r.jitter),
+            ]
+        })
+        .collect();
+    format!(
+        "<p>50 pacotes UDP por segundo durante 10 s para servidores STUN públicos. Mede a rota em UDP (o protocolo do jogo), não a banda.</p>{}",
+        table(&["Data", "Servidor", "Recebidos", "Perda", "Maior sequência perdida", "RTT mediano", "RTT p95", "Jitter"], rows)
+    )
+}
+
 fn bloat_html(bloats: &[BloatDetail], tz: i32) -> String {
     if bloats.is_empty() {
         return "<p>Nenhum teste de bufferbloat realizado no período.</p>".into();
@@ -414,7 +440,10 @@ pub fn render(report: &Report, extras: &Extras, meta: &Meta) -> String {
     html.push_str("<h2>6. Bufferbloat (latência com a linha ocupada)</h2>");
     html.push_str(&bloat_html(&extras.bloats, tz));
 
-    html.push_str("<h2>7. Alvos medidos</h2>");
+    html.push_str("<h2>7. Teste UDP (rota do jogo)</h2>");
+    html.push_str(&udp_html(&extras.udp, tz));
+
+    html.push_str("<h2>8. Alvos medidos</h2>");
     let rows = report
         .targets
         .iter()
@@ -431,7 +460,7 @@ pub fn render(report: &Report, extras: &Extras, meta: &Meta) -> String {
         .collect();
     html.push_str(&table(&["Alvo", "Amostras", "Respostas", "Mediana", "p95 típico", "Situação"], rows));
 
-    html.push_str("<h2>8. Metodologia e limitações</h2><ul>\
+    html.push_str("<h2>9. Metodologia e limitações</h2><ul>\
 <li>Latência medida por ICMP (ping), com TCP/443 como alternativa, a cada 30 s, a partir do computador do cliente. Perda = sondagens sem resposta.</li>\
 <li>Um episódio é um período de pelo menos 3 minutos com perda ≥ 20% ou mediana acima de 1,5× a base (e ≥ 15 ms). Roteador e 1º salto usam limite de +10 ms.</li>\
 <li>O primeiro salto do ISP é o primeiro endereço, depois do roteador do cliente, que aparece no traceroute.</li>\
@@ -531,6 +560,7 @@ mod tests {
                 hops: vec![HopRow { ttl: 1, ip: "1.1.1.1".into(), host: "<img src=x onerror=alert(1)>".into(), rtt_ms: 1.0, location: "Rede local".into(), is_anomaly: false }],
             }],
             bloats: vec![],
+            udp: vec![],
             stats: stats(),
         });
         assert!(!html.contains("<script>alert"));
@@ -542,8 +572,8 @@ mod tests {
 
     #[test]
     fn report_has_every_section_and_the_key_numbers() {
-        let html = render_it(Extras { routes: vec![], bloats: vec![], stats: stats() });
-        for section in ["1. Achados", "2. Comparação do caminho", "3. Episódios", "4. Comportamento por horário", "5. Rota", "6. Bufferbloat", "7. Alvos medidos", "8. Metodologia"] {
+        let html = render_it(Extras { routes: vec![], bloats: vec![], udp: vec![], stats: stats() });
+        for section in ["1. Achados", "2. Comparação do caminho", "3. Episódios", "4. Comportamento por horário", "5. Rota", "6. Bufferbloat", "7. Teste UDP", "8. Alvos medidos", "9. Metodologia"] {
             assert!(html.contains(section), "missing {section}");
         }
         assert!(html.contains("Acesso da operadora"));
@@ -561,6 +591,7 @@ mod tests {
                 RouteRunDetail { ts: 50, hairpin: false, detected_pop: None, source: None, hops: vec![hop(false)] },
             ],
             bloats: vec![],
+            udp: vec![],
             stats: stats(),
         });
         assert!(html.contains("Rota com desvio internacional"));

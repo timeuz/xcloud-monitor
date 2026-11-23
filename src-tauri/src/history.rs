@@ -60,6 +60,20 @@ CREATE TABLE IF NOT EXISTS route_runs (
     evidence TEXT,
     hops_json TEXT
 );
+CREATE TABLE IF NOT EXISTS udp_runs (
+    ts INTEGER NOT NULL,
+    target_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    sent INTEGER NOT NULL,
+    received INTEGER NOT NULL,
+    loss_pct REAL NOT NULL,
+    rtt_p50 REAL,
+    rtt_p95 REAL,
+    rtt_max REAL,
+    jitter REAL,
+    max_burst INTEGER NOT NULL,
+    PRIMARY KEY (ts, target_id)
+);
 CREATE TABLE IF NOT EXISTS bufferbloat_runs (
     ts INTEGER PRIMARY KEY,
     idle_rtt REAL NOT NULL,
@@ -195,6 +209,22 @@ pub fn bucket_for_window(window_secs: i64) -> i64 {
     (((raw + 59) / 60) * 60).max(60)
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UdpRunRow {
+    pub ts: i64,
+    pub target_id: String,
+    pub label: String,
+    pub sent: i64,
+    pub received: i64,
+    pub loss_pct: f64,
+    pub rtt_p50: Option<f64>,
+    pub rtt_p95: Option<f64>,
+    pub rtt_max: Option<f64>,
+    pub jitter: Option<f64>,
+    pub max_burst: i64,
+}
+
 pub struct History {
     conn: Mutex<Connection>,
     path: PathBuf,
@@ -324,6 +354,58 @@ impl History {
             )
             .map(|_| ())
             .map_err(|e| e.to_string())
+    }
+
+    pub fn record_udp(&self, ts: i64, r: &crate::udp::UdpTargetResult) -> Result<(), String> {
+        self.lock()
+            .execute(
+                "INSERT OR REPLACE INTO udp_runs(ts, target_id, label, sent, received, loss_pct, rtt_p50, rtt_p95, rtt_max, jitter, max_burst)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                params![
+                    ts,
+                    r.id,
+                    r.label,
+                    r.stats.sent as i64,
+                    r.stats.received as i64,
+                    r.stats.loss_pct,
+                    r.stats.rtt_p50,
+                    r.stats.rtt_p95,
+                    r.stats.rtt_max,
+                    r.stats.jitter,
+                    r.stats.max_burst_loss as i64
+                ],
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Most recent UDP test results first.
+    pub fn udp_runs(&self, limit: i64) -> Result<Vec<UdpRunRow>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT ts, target_id, label, sent, received, loss_pct, rtt_p50, rtt_p95, rtt_max, jitter, max_burst
+                 FROM udp_runs ORDER BY ts DESC, target_id LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([limit], |r| {
+                Ok(UdpRunRow {
+                    ts: r.get(0)?,
+                    target_id: r.get(1)?,
+                    label: r.get(2)?,
+                    sent: r.get(3)?,
+                    received: r.get(4)?,
+                    loss_pct: r.get(5)?,
+                    rtt_p50: r.get(6)?,
+                    rtt_p95: r.get(7)?,
+                    rtt_max: r.get(8)?,
+                    jitter: r.get(9)?,
+                    max_burst: r.get(10)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
     }
 
     pub fn record_bufferbloat(&self, ts: i64, b: &BufferbloatResponse) -> Result<(), String> {
@@ -563,7 +645,8 @@ impl History {
                 .map_err(|e| e.to_string())?;
             rows.collect::<Result<_, _>>().map_err(|e| e.to_string())?
         };
-        Ok(Extras { routes, bloats, stats })
+        let udp = self.udp_runs(30)?;
+        Ok(Extras { routes, bloats, udp, stats })
     }
 
     /// Time series of the router, first ISP hop and best xCloud entry point, bucketed for charts,
@@ -655,7 +738,7 @@ impl History {
         let conn = self.lock();
         conn.execute_batch(
             "DELETE FROM samples; DELETE FROM hourly; DELETE FROM route_runs; DELETE FROM bufferbloat_runs;
-             DELETE FROM meta WHERE key = 'rollup_until'; VACUUM;",
+             DELETE FROM udp_runs; DELETE FROM meta WHERE key = 'rollup_until'; VACUUM;",
         )
         .map_err(|e| e.to_string())
     }
@@ -797,6 +880,11 @@ pub async fn history_series(app: AppHandle, window_hours: u32) -> Result<SeriesR
     tauri::async_runtime::spawn_blocking(move || app.state::<History>().series(now_secs(), hours * HOUR))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn history_udp_runs(history: tauri::State<'_, History>, limit: Option<u32>) -> Result<Vec<UdpRunRow>, String> {
+    history.udp_runs(limit.unwrap_or(30).clamp(1, 200) as i64)
 }
 
 #[tauri::command]

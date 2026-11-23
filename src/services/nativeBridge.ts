@@ -411,3 +411,57 @@ export async function openReleasesPage(): Promise<void> {
   requireDesktop('A página de releases');
   await invokeTauri('open_releases_page');
 }
+
+// ---------------------------------------------------------------------------
+// UDP path test (STUN Binding Requests at 50 packets/s). Desktop only.
+// ---------------------------------------------------------------------------
+export interface UdpStats {
+  sent: number;
+  received: number;
+  lossPct: number;
+  rttP50: number | null;
+  rttP95: number | null;
+  rttMax: number | null;
+  jitter: number | null;
+  /** longest run of consecutive unanswered packets */
+  maxBurstLoss: number;
+}
+
+export interface UdpTargetResult extends UdpStats {
+  id: string;
+  label: string;
+  addr: string;
+  error: string | null;
+}
+
+export interface UdpTestResponse {
+  measuredAt: number;
+  packetsPerSecond: number;
+  durationSecs: number;
+  results: UdpTargetResult[];
+}
+
+export interface UdpRunRow {
+  ts: number;
+  targetId: string;
+  label: string;
+  sent: number;
+  received: number;
+  lossPct: number;
+  rttP50: number | null;
+  rttP95: number | null;
+  rttMax: number | null;
+  jitter: number | null;
+  maxBurst: number;
+}
+
+/** About 35 s: 10 s of 50 packets/s to each of three public STUN servers. */
+export async function runUdpTest(): Promise<UdpTestResponse> {
+  requireDesktop('O teste UDP');
+  return invokeTauri<UdpTestResponse>('run_udp_test');
+}
+
+export async function fetchUdpRuns(limit = 30): Promise<UdpRunRow[]> {
+  requireDesktop('O histórico de testes UDP');
+  return invokeTauri<UdpRunRow[]>('history_udp_runs', { limit });
+}
