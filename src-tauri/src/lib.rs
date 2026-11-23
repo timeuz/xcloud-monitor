@@ -23,7 +23,12 @@ fn is_desktop_native() -> bool {
 async fn probe_telemetry(custom_host: Option<String>) -> Result<TelemetryProbeResponse, String> {
     // Run CPU/blocking network probes off the main async reactor
     let result = tauri::async_runtime::spawn_blocking(move || {
-        probe_all_strategic(custom_host)
+        let mut probe = probe_all_strategic(custom_host);
+        // own router and first ISP hop, taken from the last traceroute (none until one ran)
+        if let Some((gw, isp)) = route::path_probe_targets() {
+            probe.endpoints.extend(network::probe_path_points(&gw, isp.as_deref()));
+        }
+        probe
     })
     .await
     .map_err(|e| e.to_string())?;

@@ -35,14 +35,13 @@ import {
   RefreshCw,
   Compass,
   Sliders,
-  Globe,
   Radio,
   Settings,
 } from 'lucide-react';
 
 function Dashboard() {
   // Navigation & View Tab State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'route' | 'servers' | 'history' | 'globe'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'route' | 'servers' | 'history'>('dashboard');
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [appVersion, setAppVersion] = useState('');
@@ -498,18 +497,6 @@ function Dashboard() {
           >
             Histórico
           </button>
-          <button
-            onClick={() => {
-              setActiveTab('globe');
-            }}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'globe'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                : 'hover:text-slate-200'
-            }`}
-          >
-            Mapa de Rotas
-          </button>
         </nav>
 
         {/* Zone 3: Primary Actions */}
@@ -632,27 +619,6 @@ function Dashboard() {
         )}
 
         {activeTab === 'history' && <HistoryView />}
-
-        {activeTab === 'globe' && (
-          <div className="rounded-xl border border-cyan-900/40 bg-[#06111a] p-4 shadow-lg space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-cyan-900/30 gap-2">
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-cyan-400" />
-                <h3 className="text-sm font-bold font-mono tracking-wide text-slate-100 uppercase">
-                  MAPA TÁTICO DE ROTAS E CABOS SUBMARINOS // AS8075 & EUA
-                </h3>
-              </div>
-            </div>
-            <p className="text-xs text-slate-400">
-              Visualização de rotas com pacotes em tempo real. Observe o enlace submarino (Monet / Seabras-1) ligando o Brasil aos servidores de referência em Miami, Atlanta e Ashburn nos Estados Unidos. Passe o mouse ou clique sobre qualquer nó para inspecionar telemetria detalhada.
-            </p>
-            <NetworkMap2D
-              isHairpinning={isHairpinning}
-              rttMs={metrics.rttMs}
-              className="h-[520px]"
-            />
-          </div>
-        )}
       </main>
 
       {/* Footer */}
