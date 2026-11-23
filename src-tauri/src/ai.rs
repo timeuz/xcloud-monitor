@@ -149,7 +149,6 @@ fn truthy(v: &Value) -> bool {
 fn build_system_prompt(context: &Value) -> String {
     let metrics = &context["metrics"];
     let verdict = &context["verdict"];
-    let server = &context["serverStatus"];
     let trace = &context["traceroute"];
 
     let smoothed = if metrics["smoothedRttMs"].is_null() {
@@ -181,33 +180,27 @@ DADOS DE TELEMETRIA EM TEMPO REAL:
 - Meio Físico Local: {medium}
 - Saltos TTL até Datacenter: {hops} hops
 - Status da Rota BGP: {route}
-- Status do Cluster Azure brazilsouth (SP): Carga {load}%, Risco de Fila: {risk}, Fila estimada: {wait} min ({qmsg}).
 - Veredito Geral Atual: Rank {rank} ({headline}). É bom momento para jogar: {good_time}. Causa raiz: {root}.
 
 DIRETRIZES DE RESPOSTA E REGRA DE OURO DA LATÊNCIA:
 1. REGRA ABSOLUTA DE LATÊNCIA (PRIORIDADE MÁXIMA):
    - No Xbox Cloud Gaming a 60 FPS, a latência do jogador (RTT) é o elemento MAIS CRÍTICO da jogabilidade.
-   - Se a latência estiver alta (RTT > 45ms, e especialmente > 60ms), JAMAIS diga que a situação está \"ótima\" ou \"excelente\" só porque a fila dos servidores da Microsoft está zerada!
-   - Esclareça ao jogador: \"Embora os servidores da Microsoft estejam sem filas, a latência da sua internet está alta (X ms), gerando atraso e input lag nos comandos. O momento NÃO é favorável para jogos rápidos!\"
+   - Se a latência estiver alta (RTT > 45ms, e especialmente > 60ms), JAMAIS diga que a situação está \"ótima\" ou \"excelente\" só porque o servidor da Microsoft responde!
+   - Esclareça ao jogador: \"A latência da sua internet está alta (X ms), gerando atraso e input lag nos comandos. O momento NÃO é favorável para jogos rápidos!\"
 2. Seja DIRETO, CONCISO e assertivo (2 a 4 frases objetivas em Português do Brasil).
 3. Isole claramente a causa:
    - Se houver BGP Hairpinning ou RTT > 120ms: falha grave de rota da operadora (ISP) desviando tráfego aos EUA.
-   - Se RTT estiver entre 45ms e 80ms: latência acima da ideal; avise sobre input lag mesmo se a nuvem estiver vazia.
+   - Se RTT estiver entre 45ms e 80ms: latência acima da ideal; avise sobre input lag mesmo que o restante pareça normal.
    - Se houver Wi-Fi 2.4GHz ou jitter elevado (> 10ms): o problema é a rede local sem fio (recomende cabo RJ45 ou Wi-Fi 5GHz).
    - Se houver delta de Bufferbloat > 40ms: o roteador doméstico está saturando filas em picos de download/upload.
-   - Se a latência for baixa (< 25ms) mas houver fila na Microsoft: a internet do jogador está perfeita, porém o datacenter está em horário de pico (aguarde a alocação).
-   - Se tudo estiver nominal (< 25ms RTT, jitter < 2.5ms, sem fila): elogie o Rank S e confirme sensação idêntica a console local.
-4. IMPORTANTE PARA SÍNTESE DE VOZ:
-   Sua resposta será lida em voz alta por um sintetizador neural com dicção feminina expressiva. Pontue o texto com riqueza (use vírgulas para pausas naturais e pontos finais bem colocados). NÃO use asteriscos, markdown, tabelas ou emojis.",
+   - Se tudo estiver nominal (< 25ms RTT, jitter < 2.5ms, sem perda): elogie o Rank S e confirme sensação idêntica a console local.
+4. FORMATO:
+   Escreva em texto corrido. NÃO use asteriscos, markdown, tabelas ou emojis.",
         rtt = show(&metrics["rttMs"], "N/D"),
         jitter = show(&metrics["jitterMs"], "N/D"),
         loss = show(&metrics["packetLossPct"], "0"),
         bloat = show(&metrics["bufferbloatDeltaMs"], "N/D"),
         hops = show(&metrics["ttlHops"], "5"),
-        load = show(&server["serverLoadPercentage"], "40"),
-        risk = show(&server["queueRisk"], "NONE"),
-        wait = show(&server["estimatedWaitMinutes"], "0"),
-        qmsg = show(&server["queueMessage"], ""),
         rank = show(&verdict["rank"], "A"),
         headline = show(&verdict["headline"], "Nominal"),
         root = show(&verdict["rootCauseTitle"], "Nominal"),

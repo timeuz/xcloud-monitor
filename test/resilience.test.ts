@@ -1,7 +1,7 @@
 import assert from 'assert';
 import { computeVerdict, rawRankWithHysteresis } from '../src/domain/verdict';
 import { FORCED_HAIRPIN, HairpinState, nextHairpinState, smoothRtt } from '../src/domain/telemetry';
-import { GamingRank, NetworkMetrics, XCloudServerStatus } from '../src/types/telemetry';
+import { GamingRank, NetworkMetrics } from '../src/types/telemetry';
 
 /**
  * Resilient telemetry pipeline: EMA smoothing, hairpin hysteresis, rank deadbands and the latency-first rule.
@@ -22,18 +22,6 @@ const metrics = (over: Partial<NetworkMetrics> = {}): NetworkMetrics => ({
   ...over,
 });
 
-const server = (over: Partial<XCloudServerStatus> = {}): XCloudServerStatus => ({
-  region: 'brazilsouth',
-  regionStatus: 'ONLINE',
-  dataCenter: 'sp',
-  serverLoadPercentage: 30,
-  estimatedWaitMinutes: 0,
-  queueRisk: 'NONE',
-  queueMessage: '',
-  currentHourBRT: '12:00',
-  peeringHealth: 'ok',
-  ...over,
-});
 
 console.log('--- TEST 1: Single Spike Resilience (EMA Smoothing) ---');
 const smoothed = smoothRtt(14.0, 125.0);
@@ -73,7 +61,7 @@ let currentRank: GamingRank = 'B';
 const noisyPings = [64.0, 68.0, 63.5, 67.5, 65.0, 69.0, 64.5];
 const rankHistory: string[] = [];
 for (const p of noisyPings) {
-  currentRank = rawRankWithHysteresis(currentRank, p, 1.2, 0, false, 5, false, 30, 'NONE');
+  currentRank = rawRankWithHysteresis(currentRank, p, 1.2, 0, false, 5, false);
   rankHistory.push(currentRank);
 }
 console.log('Rank history under noisy 63-69ms pings:', rankHistory);
@@ -81,33 +69,32 @@ assert(rankHistory.every((r) => r === 'B'), 'Deadband must prevent flapping');
 console.log('Confirmed: 0 rank flip-flops observed in the 63-69ms region.');
 
 console.log('\n--- TEST 5: Latency-First Golden Rule (Never declares ótimo on high latency) ---');
-assert.strictEqual(rawRankWithHysteresis('B', 78, 1.2, 0, false, 4, false, 20, 'NONE'), 'F', 'RTT of 78ms must be Rank F');
-assert.strictEqual(rawRankWithHysteresis('A', 52, 1.2, 0, false, 4, false, 20, 'NONE'), 'B', 'RTT of 52ms must be Rank B, never A or S');
-assert.strictEqual(rawRankWithHysteresis('S', 36, 1.2, 0, false, 4, true, 20, 'NONE'), 'F', 'a detour forces F');
-assert.strictEqual(rawRankWithHysteresis('F', 60, 1.2, 0, false, 4, false, 20, 'NONE'), 'B', 'F recovers below 68 ms');
+assert.strictEqual(rawRankWithHysteresis('B', 78, 1.2, 0, false, 4, false), 'F', 'RTT of 78ms must be Rank F');
+assert.strictEqual(rawRankWithHysteresis('A', 52, 1.2, 0, false, 4, false), 'B', 'RTT of 52ms must be Rank B, never A or S');
+assert.strictEqual(rawRankWithHysteresis('S', 36, 1.2, 0, false, 4, true), 'F', 'a detour forces F');
+assert.strictEqual(rawRankWithHysteresis('F', 60, 1.2, 0, false, 4, false), 'B', 'F recovers below 68 ms');
 
-console.log('\n--- TEST 6: The verdict never calls a slow connection good because the cloud queue is empty ---');
+console.log('\n--- TEST 6: The verdict never calls a slow connection good because the cloud answers ---');
 const slow = computeVerdict({
   metrics: metrics({ rttMs: 78, smoothedRttMs: 78 }),
   isHairpinning: false,
-  serverStatus: server({ estimatedWaitMinutes: 0 }),
 });
 assert.strictEqual(slow.isGoodTimeToPlay, false);
 assert.strictEqual(slow.rank, 'F');
-assert.ok(slow.queueStatusText.includes('fila zerada') && slow.queueStatusText.includes('latência'), slow.queueStatusText);
+assert.ok(slow.statusText.includes('latência'), slow.statusText);
 
-const fine = computeVerdict({ metrics: metrics(), isHairpinning: false, serverStatus: server() });
+const fine = computeVerdict({ metrics: metrics(), isHairpinning: false });
 assert.strictEqual(fine.isGoodTimeToPlay, true);
 assert.ok(['S', 'A'].includes(fine.rank));
 
-const detour = computeVerdict({ metrics: metrics({ rttMs: 135 }), isHairpinning: true, serverStatus: server() });
+const detour = computeVerdict({ metrics: metrics({ rttMs: 135 }), isHairpinning: true });
 assert.strictEqual(detour.rank, 'F');
 assert.strictEqual(detour.isGoodTimeToPlay, false);
 assert.ok(detour.headline.includes('Hairpinning'), detour.headline);
 
-const wifi = computeVerdict({ metrics: metrics({ isWifi24Ghz: true, jitterMs: 12, smoothedJitterMs: 12 }), isHairpinning: false, serverStatus: server() });
+const wifi = computeVerdict({ metrics: metrics({ isWifi24Ghz: true, jitterMs: 12, smoothedJitterMs: 12 }), isHairpinning: false });
 assert.strictEqual(wifi.rootCauseCategory, 'LOCAL_CONNECTION');
-const bloat = computeVerdict({ metrics: metrics({ bufferbloatDeltaMs: 70 }), isHairpinning: false, serverStatus: server() });
+const bloat = computeVerdict({ metrics: metrics({ bufferbloatDeltaMs: 70 }), isHairpinning: false });
 assert.strictEqual(bloat.rank, 'B');
 console.log('Confirmed: latency first; detour, Wi-Fi and bufferbloat are attributed to the right cause.');
 

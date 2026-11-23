@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { UpdateInfo, checkForUpdate, fetchAppVersion, installUpdate, isTauriApp, openReleasesPage } from '../services/nativeBridge';
-import { playUiClick } from '../services/soundEffects';
 
 /** Manual "check for updates" with the installed version. Desktop only. */
 export const UpdateSettings: React.FC = () => {
@@ -30,7 +29,6 @@ export const UpdateSettings: React.FC = () => {
           type="button"
           disabled={busy}
           onClick={async () => {
-            playUiClick();
             setBusy(true);
             setMessage('');
             setUpdate(null);
@@ -55,7 +53,6 @@ export const UpdateSettings: React.FC = () => {
               type="button"
               disabled={busy}
               onClick={async () => {
-                playUiClick();
                 setBusy(true);
                 try {
                   await installUpdate();

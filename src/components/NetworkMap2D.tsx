@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShieldAlert, CheckCircle2, Radio, Globe, Navigation, Layers } from 'lucide-react';
-import { playUiClick } from '../services/soundEffects';
 import { WORLD_LAND_PATH } from './worldLand';
 
 interface NetworkMap2DProps {
@@ -379,7 +378,6 @@ export const NetworkMap2D: React.FC<NetworkMap2DProps> = ({
               key={node.id}
               onClick={(e) => {
                 e.stopPropagation();
-                playUiClick();
                 setSelectedNode((prev) => (prev?.id === node.id ? null : node));
               }}
               onMouseEnter={() => setHoveredNodeId(node.id)}

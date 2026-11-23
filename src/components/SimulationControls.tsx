@@ -1,12 +1,10 @@
 import React from 'react';
 import { Sliders, RotateCcw, AlertTriangle, Wifi, Flame, Server, Play, Zap } from 'lucide-react';
-import { playUiClick } from '../services/soundEffects';
 
 interface SimulationControlsProps {
   onSimulateHairpinning: () => void;
   onSimulateWifi: () => void;
   onSimulateBufferbloat: () => void;
-  onSimulateServerLoad: () => void;
   onResetNominal: () => void;
   onTriggerBufferbloat: () => void;
   isTestingBufferbloat: boolean;
@@ -17,7 +15,6 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
   onSimulateHairpinning,
   onSimulateWifi,
   onSimulateBufferbloat,
-  onSimulateServerLoad,
   onResetNominal,
   onTriggerBufferbloat,
   isTestingBufferbloat,
@@ -34,7 +31,6 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         </div>
         <button
           onClick={() => {
-            playUiClick();
             onResetNominal();
           }}
           className="flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-medium rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors"
@@ -49,11 +45,10 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
       </p>
 
       {/* Button Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
         {/* 1. Hairpinning BGP */}
         <button
           onClick={() => {
-            playUiClick();
             onSimulateHairpinning();
           }}
           className={`p-2.5 rounded-lg border text-left text-xs font-mono transition-all flex flex-col justify-between gap-1.5 ${
@@ -74,7 +69,6 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         {/* 2. Wi-Fi 2.4GHz */}
         <button
           onClick={() => {
-            playUiClick();
             onSimulateWifi();
           }}
           className={`p-2.5 rounded-lg border text-left text-xs font-mono transition-all flex flex-col justify-between gap-1.5 ${
@@ -95,7 +89,6 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         {/* 3. Bufferbloat */}
         <button
           onClick={() => {
-            playUiClick();
             onSimulateBufferbloat();
           }}
           className={`p-2.5 rounded-lg border text-left text-xs font-mono transition-all flex flex-col justify-between gap-1.5 ${
@@ -110,27 +103,6 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
           </div>
           <span className="text-[11px] text-slate-400 leading-tight">
             Fila saturada no roteador (+68ms)
-          </span>
-        </button>
-
-        {/* 4. Sobrecarga Servidor Microsoft */}
-        <button
-          onClick={() => {
-            playUiClick();
-            onSimulateServerLoad();
-          }}
-          className={`p-2.5 rounded-lg border text-left text-xs font-mono transition-all flex flex-col justify-between gap-1.5 ${
-            activeSimulation === 'server_load'
-              ? 'bg-amber-950/60 border-amber-500 text-amber-200 ring-1 ring-amber-500'
-              : 'bg-[#040b12] border-cyan-950 hover:border-cyan-500/40 text-slate-300'
-          }`}
-        >
-          <div className="flex items-center gap-1.5 font-bold text-cyan-400">
-            <Server className="w-3.5 h-3.5" />
-            <span>4. Fila no Servidor</span>
-          </div>
-          <span className="text-[11px] text-slate-400 leading-tight">
-            Horário de pico &gt; 92% e filas
           </span>
         </button>
       </div>

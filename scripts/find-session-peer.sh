@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Finds the game server of a running xCloud/xStreaming session by watching UDP traffic for a few seconds.
+# Finds the game server of a running xCloud session (any client, browser included) by watching UDP traffic for a few seconds.
 #
 # Why a script: the stream uses UDP sockets that are not "connected", so no unprivileged tool (and not the app)
 # can see the remote address. A short packet capture can, and that needs root. Nothing is stored or sent

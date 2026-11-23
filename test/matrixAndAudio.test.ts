@@ -48,6 +48,7 @@ assert(!appTsx.includes("confetti({"), 'Confetti trigger must be removed from Ap
 assert(!appTsx.includes("playVerdictUpgradeSound"), 'playVerdictUpgradeSound must be removed from App.tsx');
 assert(!appTsx.includes("playVerdictDegradeSound"), 'playVerdictDegradeSound must be removed from App.tsx');
 assert(appTsx.includes("isProbingRef"), 'Concurrency guard isProbingRef must be present in App.tsx');
+assert.ok(!fs.existsSync(path.resolve(process.cwd(), 'src/services/soundEffects.ts')), 'the app has no sound effects');
 console.log('Confirmed: Confetti, rank transition audio triggers, and overlap vulnerability have been completely removed.');
 
 console.log('✅ ALL MATRIX & AUDIO CLEANLINESS TESTS PASSED SUCCESSFULLY!');

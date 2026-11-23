@@ -7,7 +7,7 @@ export type ConnectionQuality = 'BOA' | 'ATENÇÃO' | 'RUIM';
 
 export type GamingRank = 'S' | 'A' | 'B' | 'F';
 
-export type RootCauseCategory = 'LOCAL_CONNECTION' | 'ISP_ROUTE' | 'MICROSOFT_SERVERS' | 'NOMINAL';
+export type RootCauseCategory = 'LOCAL_CONNECTION' | 'ISP_ROUTE' | 'NOMINAL';
 
 export type NetworkTrendStatus = 'ESTÁVEL' | 'MELHORANDO' | 'OSCILANDO' | 'DEGRADANDO';
 
@@ -77,23 +77,11 @@ export interface TracerouteReport {
   measuredAt?: number;
 }
 
-export interface XCloudServerStatus {
-  region: string;
-  regionStatus: string;
-  dataCenter: string;
-  serverLoadPercentage: number;
-  estimatedWaitMinutes: number;
-  queueRisk: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
-  queueMessage: string;
-  currentHourBRT: string;
-  peeringHealth: string;
-}
-
 export interface GamingVerdict {
   rank: GamingRank;
   headline: string;
   isGoodTimeToPlay: boolean;
-  queueStatusText: string;
+  statusText: string;
   rootCauseCategory: RootCauseCategory;
   rootCauseTitle: string;
   rootCauseDescription: string;
@@ -105,34 +93,5 @@ export interface CoPilotMessage {
   text: string;
   type: 'info' | 'warning' | 'alert' | 'success';
   timestamp: number;
-}
-
-export interface LiveGameQueue {
-  /** false when no game is selected and the account has no play history. */
-  hasTitle?: boolean;
-  titleId: string;
-  titleName: string;
-  productId?: string;
-  posterUrl?: string;
-  estimatedWaitSeconds: number;
-  estimatedWaitMinutes: number;
-  provisioningSeconds: number;
-  allocationSeconds: number;
-  lastTimePlayed?: string;
-  gamertag?: string;
-  gamerpic?: string;
-  region: string;
-  source: 'xstreaming_live' | 'manual' | 'simulated';
-  updatedAt: number;
-  isCurrentlyPlaying?: boolean;
-}
-
-export interface XCloudGameSearchResult {
-  titleId: string;
-  productId: string;
-  titleName: string;
-  posterUrl?: string;
-  estimatedWaitSeconds?: number;
-  estimatedWaitMinutes?: number;
 }
 

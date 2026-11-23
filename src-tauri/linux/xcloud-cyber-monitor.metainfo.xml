@@ -15,8 +15,14 @@
     <p>Guarda o historico apenas no seu computador e gera um relatorio com evidencias para abrir chamado na operadora.</p>
   </description>
   <launchable type="desktop-id">xcloud-cyber-monitor.desktop</launchable>
+  <icon type="stock">xcloud-cyber-monitor</icon>
+  <categories>
+    <category>Network</category>
+    <category>Utility</category>
+  </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.1.0" date="2026-11-23"/>
     <release version="1.0.2" date="2026-11-23"/>
     <release version="1.0.1" date="2026-11-23"/>
     <release version="1.0.0" date="2026-11-04"/>

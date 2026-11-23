@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, Copy, Check, Download, FileText, Loader2 } from 'lucide-react';
-import { NetworkMetrics, StrategicEndpoint, TracerouteReport, XCloudServerStatus, GamingVerdict } from '../types/telemetry';
-import { playUiClick } from '../services/soundEffects';
+import { NetworkMetrics, StrategicEndpoint, TracerouteReport, GamingVerdict } from '../types/telemetry';
 import { exportEvidenceReport, isTauriApp } from '../services/nativeBridge';
 
 interface ReportModalProps {
@@ -10,7 +9,6 @@ interface ReportModalProps {
   metrics: NetworkMetrics;
   endpoints: StrategicEndpoint[];
   traceroute: TracerouteReport;
-  serverStatus: XCloudServerStatus;
   verdict: GamingVerdict;
 }
 
@@ -20,7 +18,6 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   metrics,
   endpoints,
   traceroute,
-  serverStatus,
   verdict,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -40,7 +37,6 @@ Servidor Alvo: Azure brazilsouth (São Paulo - AS8075)
 ## 1. RESUMO EXECUTIVO
 * Classificação: RANK ${verdict.rank} (${verdict.headline})
 * Momento para Jogar: ${verdict.isGoodTimeToPlay ? 'Favorável / Recomendado' : 'Desfavorável / Degradação Ativa'}
-* Fila Estimada: ${serverStatus.estimatedWaitMinutes} minutos (${serverStatus.queueMessage})
 * Causa Raiz Identificada: ${verdict.rootCauseTitle}
 * Diagnóstico: ${verdict.rootCauseDescription}
 
@@ -83,14 +79,12 @@ Gerado por xCloud Cyber-Monitor Telemetry Suite (Compatível com especificação
 `;
 
   const handleCopy = () => {
-    playUiClick();
     navigator.clipboard.writeText(reportMarkdown);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = () => {
-    playUiClick();
     const blob = new Blob([reportMarkdown], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -113,7 +107,6 @@ Gerado por xCloud Cyber-Monitor Telemetry Suite (Compatível com especificação
           </div>
           <button
             onClick={() => {
-              playUiClick();
               onClose();
             }}
             className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
@@ -134,7 +127,6 @@ Gerado por xCloud Cyber-Monitor Telemetry Suite (Compatível com especificação
               type="button"
               disabled={evidenceBusy}
               onClick={async () => {
-                playUiClick();
                 setEvidenceBusy(true);
                 setEvidenceMsg('');
                 try {

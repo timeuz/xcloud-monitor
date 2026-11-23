@@ -9,12 +9,9 @@ mod route;
 mod session;
 mod udp;
 mod updater;
-mod xcloud;
 
 use network::{
-    calculate_xcloud_status, probe_all_strategic,
-    probe_host, TelemetryProbeResponse,
-    XCloudStatusResponse,
+    probe_all_strategic, probe_host, TelemetryProbeResponse,
 };
 
 #[tauri::command]
@@ -57,11 +54,6 @@ async fn run_bufferbloat(
         }
     }
     Ok(result)
-}
-
-#[tauri::command]
-fn get_xcloud_status() -> XCloudStatusResponse {
-    calculate_xcloud_status()
 }
 
 use tauri::Manager;
@@ -137,12 +129,6 @@ pub fn run() {
             probe_single_host,
             run_bufferbloat,
             route::run_traceroute,
-            get_xcloud_status,
-            xcloud::xcloud_user_session,
-            xcloud::xcloud_active_game,
-            xcloud::xcloud_recent_games,
-            xcloud::xcloud_search_games,
-            xcloud::xcloud_waittime,
             ai::ai_status,
             ai::ai_verify,
             ai::ai_save_key,

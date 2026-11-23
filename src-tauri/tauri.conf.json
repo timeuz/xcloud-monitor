@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "xcloud-cyber-monitor",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "identifier": "br.com.xcloud.cybermonitor",
   "build": {
     "frontendDist": "../dist",
@@ -55,7 +55,8 @@
         "section": "net",
         "files": {
           "/usr/share/metainfo/io.github.timeuz.xcloud-monitor.metainfo.xml": "linux/xcloud-cyber-monitor.metainfo.xml"
-        }
+        },
+        "desktopTemplate": "linux/xcloud-cyber-monitor.desktop"
       }
     }
   },

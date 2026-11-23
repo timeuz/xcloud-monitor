@@ -13,7 +13,6 @@ import {
   setCloseToTray,
   setHistoryEnabled,
 } from '../services/nativeBridge';
-import { playUiClick } from '../services/soundEffects';
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -77,7 +76,6 @@ export const HistorySettings: React.FC = () => {
               checked={stats.enabled}
               disabled={busy}
               onChange={(e) => {
-                playUiClick();
                 run(() => setHistoryEnabled(e.target.checked));
               }}
             />
@@ -107,7 +105,6 @@ export const HistorySettings: React.FC = () => {
               checked={desktop.closeToTray && desktop.trayAvailable}
               disabled={busy || !desktop.trayAvailable}
               onChange={(e) => {
-                playUiClick();
                 run(() => setCloseToTray(e.target.checked));
               }}
             />
@@ -128,7 +125,6 @@ export const HistorySettings: React.FC = () => {
               checked={desktop.autostart}
               disabled={busy}
               onChange={(e) => {
-                playUiClick();
                 run(() => setAutostart(e.target.checked));
               }}
             />
@@ -142,7 +138,6 @@ export const HistorySettings: React.FC = () => {
           type="button"
           disabled={busy || !stats || stats.sampleCount === 0}
           onClick={() => {
-            playUiClick();
             run(async () => `Relatório salvo em ${await exportEvidenceReport()} (abra no navegador e imprima em PDF)`);
           }}
           className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-black flex items-center gap-1.5 disabled:opacity-50"
@@ -154,7 +149,6 @@ export const HistorySettings: React.FC = () => {
           type="button"
           disabled={busy || !stats || stats.sampleCount === 0}
           onClick={() => {
-            playUiClick();
             run(async () => `CSV salvo em ${await exportHistoryCsv()}`);
           }}
           className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-cyan-950 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-700/40 flex items-center gap-1.5 disabled:opacity-50"
@@ -166,7 +160,6 @@ export const HistorySettings: React.FC = () => {
           type="button"
           disabled={busy || !stats || stats.sampleCount === 0}
           onClick={() => {
-            playUiClick();
             if (!confirmClear) {
               setConfirmClear(true);
               return;
