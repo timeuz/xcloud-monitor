@@ -1,4 +1,4 @@
-import { StrategicEndpoint, TracerouteReport } from '../types/telemetry';
+import { RouteHop, StrategicEndpoint, TracerouteReport } from '../types/telemetry';
 
 export interface TelemetryProbeResponse {
   timestamp: number;
@@ -437,6 +437,7 @@ export interface SessionRun {
   icmpBlocked: boolean;
   hairpin: boolean;
   hopCount: number;
+  hops: RouteHop[];
   largestJump: { fromTtl: number; fromIp: string; toTtl: number; toIp: string; deltaMs: number; toRtt: number } | null;
 }
 
@@ -444,6 +445,19 @@ export interface SessionRun {
 export async function measureSessionPeer(peer: string, note?: string): Promise<SessionRun> {
   requireDesktop('A medição do servidor da sessão');
   return invokeTauri<SessionRun>('measure_session_peer', { peer, note: note ?? null });
+}
+
+export interface PeerCandidate {
+  ip: string;
+  port: number | null;
+  bytes: number;
+  packets: number;
+}
+
+/** Linux: captures UDP for a few seconds (graphical admin prompt) and returns the busiest public peers. */
+export async function detectSessionPeers(): Promise<PeerCandidate[]> {
+  requireDesktop('A detecção do servidor da sessão');
+  return invokeTauri<PeerCandidate[]>('detect_session_peers');
 }
 
 export async function fetchSessionRuns(limit = 20): Promise<SessionRun[]> {

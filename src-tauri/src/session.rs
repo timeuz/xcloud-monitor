@@ -1,8 +1,8 @@
 //! Measures the game session's real media server.
 //!
 //! The server changes every match and is not visible to an unprivileged app (WebRTC uses unconnected UDP
-//! sockets), so the user supplies its IP (the helper script `scripts/find-session-peer.sh` finds it with a
-//! short packet capture). The app then measures it like any other target: ping series, route with the hairpin
+//! sockets), so the user supplies its IP. On Linux the app can find it itself: a short packet capture run
+//! through `pkexec` (a graphical password prompt), the same thing `scripts/find-session-peer.sh` does. The app then measures it like any other target: ping series, route with the hairpin
 //! analysis, and the difference against the xCloud entry point measured at the same time. That is the number
 //! that answers "but your ICMP test is not the game": it is the game's own server.
 
@@ -163,6 +163,127 @@ pub fn measure_peer(history: &History, input: &str, note: Option<String>) -> Res
     Ok(run)
 }
 
+/// A public UDP peer seen during the capture, ranked by the bytes exchanged with it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PeerCandidate {
+    pub ip: String,
+    /// port with the most traffic for that address
+    pub port: Option<u16>,
+    pub bytes: u64,
+    pub packets: u64,
+}
+
+const CAPTURE_SECONDS: u32 = 6;
+
+/// Splits tcpdump's "a.b.c.d.port" into the address and the port.
+fn split_endpoint(token: &str) -> Option<(Ipv4Addr, Option<u16>)> {
+    let token = token.trim_end_matches(':');
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() < 4 {
+        return None;
+    }
+    let octets: Option<Vec<u8>> = parts.iter().take(4).map(|p| p.parse::<u8>().ok()).collect();
+    let o = octets?;
+    let port = parts.get(4).and_then(|p| p.parse::<u16>().ok());
+    Some((Ipv4Addr::new(o[0], o[1], o[2], o[3]), port))
+}
+
+/// Reads `tcpdump -nn -q` lines ("... IP a.b.c.d.1234 > e.f.g.h.5678: UDP, length 96"), sums the bytes per
+/// public IPv4 address and returns the busiest ones. Private, multicast and other non-public addresses are skipped.
+pub fn parse_capture(text: &str, top: usize) -> Vec<PeerCandidate> {
+    use std::collections::HashMap;
+    // address -> (bytes, packets, port -> bytes)
+    let mut seen: HashMap<Ipv4Addr, (u64, u64, HashMap<u16, u64>)> = HashMap::new();
+    for line in text.lines() {
+        if !line.contains(" IP ") || !line.contains("UDP, length") {
+            continue;
+        }
+        let toks: Vec<&str> = line.split_whitespace().collect();
+        let Some(gt) = toks.iter().position(|t| *t == ">") else { continue };
+        if gt == 0 || gt + 1 >= toks.len() {
+            continue;
+        }
+        let len = toks
+            .iter()
+            .position(|t| *t == "length")
+            .and_then(|i| toks.get(i + 1))
+            .and_then(|v| v.trim_end_matches(',').parse::<u64>().ok())
+            .unwrap_or(0);
+        for tok in [toks[gt - 1], toks[gt + 1]] {
+            let Some((ip, port)) = split_endpoint(tok) else { continue };
+            if validate_peer(&ip.to_string()).is_err() {
+                continue;
+            }
+            let e = seen.entry(ip).or_insert_with(|| (0, 0, HashMap::new()));
+            e.0 += len;
+            e.1 += 1;
+            if let Some(p) = port {
+                *e.2.entry(p).or_insert(0) += len;
+            }
+        }
+    }
+    let mut out: Vec<PeerCandidate> = seen
+        .into_iter()
+        .map(|(ip, (bytes, packets, ports))| PeerCandidate {
+            ip: ip.to_string(),
+            port: ports.into_iter().max_by_key(|(_, b)| *b).map(|(p, _)| p),
+            bytes,
+            packets,
+        })
+        .collect();
+    out.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.ip.cmp(&b.ip)));
+    out.truncate(top);
+    out
+}
+
+/// Absolute path of a system binary, looked up only in fixed system directories (never in the user's PATH,
+/// because the result is run as root).
+#[cfg(target_os = "linux")]
+fn system_binary(name: &str) -> Option<std::path::PathBuf> {
+    ["/usr/bin", "/usr/sbin", "/bin", "/sbin"]
+        .iter()
+        .map(|d| std::path::Path::new(d).join(name))
+        .find(|p| p.is_file())
+}
+
+/// Captures UDP traffic for a few seconds as root (graphical prompt) and returns the busiest public peers.
+#[cfg(target_os = "linux")]
+fn capture_peers() -> Result<Vec<PeerCandidate>, String> {
+    let pkexec = system_binary("pkexec").ok_or("O pkexec não foi encontrado; instale o polkit ou use o script manual.")?;
+    let tcpdump = system_binary("tcpdump").ok_or("O tcpdump não está instalado. Instale com: sudo apt install tcpdump")?;
+    let timeout = system_binary("timeout").ok_or("O comando timeout (coreutils) não foi encontrado.")?;
+    // Fixed arguments only: nothing typed by the user reaches a command that runs as root.
+    let out = Command::new(pkexec)
+        .arg(timeout)
+        .arg(CAPTURE_SECONDS.to_string())
+        .arg(tcpdump)
+        .args(["-nn", "-q", "-l", "-c", "40000", "-i", "any", "udp"])
+        .output()
+        .map_err(|e| format!("Não consegui iniciar a captura: {e}"))?;
+    // pkexec: 126 = prompt dismissed or not authorized, 127 = authentication failed. `timeout` ends the capture with 124.
+    match out.status.code() {
+        Some(126) => return Err("Captura cancelada: a autorização não foi concedida.".into()),
+        Some(127) => return Err("Autenticação falhou; tente de novo.".into()),
+        _ => {}
+    }
+    let peers = parse_capture(&String::from_utf8_lossy(&out.stdout), 5);
+    if peers.is_empty() {
+        return Err("Nenhum tráfego UDP público visto. Rode isto com o jogo em andamento.".into());
+    }
+    Ok(peers)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn capture_peers() -> Result<Vec<PeerCandidate>, String> {
+    Err("A detecção automática só existe no Linux por enquanto. Cole o endereço manualmente (Wireshark no Windows).".into())
+}
+
+#[tauri::command]
+pub async fn detect_session_peers() -> Result<Vec<PeerCandidate>, String> {
+    tauri::async_runtime::spawn_blocking(capture_peers).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn measure_session_peer(app: tauri::AppHandle, peer: String, note: Option<String>) -> Result<SessionRun, String> {
     use tauri::Manager;
@@ -261,5 +382,28 @@ mod tests {
         let run = measure_peer(&h, &peer, Some("teste".into())).unwrap();
         println!("{}", serde_json::to_string_pretty(&run).unwrap());
         assert_eq!(h.session_runs(5).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn capture_ranks_public_peers_and_ignores_the_rest() {
+        let cap = "\
+10:00:00.1 eth0 Out IP 192.168.1.19.52012 > 13.104.105.250.1069: UDP, length 100
+10:00:00.2 eth0 In  IP 13.104.105.250.1069 > 192.168.1.19.52012: UDP, length 1200
+10:00:00.3 eth0 In  IP 13.104.105.250.1069 > 192.168.1.19.52012: UDP, length 1200
+10:00:00.4 eth0 Out IP 192.168.1.19.40000 > 74.125.250.129.19302: UDP, length 20
+10:00:00.5 eth0 In  IP 192.168.1.1.5353 > 224.0.0.251.5353: UDP, length 90
+10:00:00.6 eth0 In  IP6 fe80::1.546 > ff02::1:2.547: UDP, length 80
+10:00:00.7 eth0 In  IP 192.168.1.5.1900 > 239.255.255.250.1900: UDP, length 300
+10:00:00.8 eth0 In  IP 10.0.0.2.1234 > 192.168.1.19.5555: UDP, length 5000
+";
+        let peers = parse_capture(cap, 5);
+        assert_eq!(peers.len(), 2, "{peers:?}");
+        assert_eq!(peers[0].ip, "13.104.105.250");
+        assert_eq!(peers[0].port, Some(1069));
+        assert_eq!(peers[0].bytes, 2500);
+        assert_eq!(peers[0].packets, 3);
+        assert_eq!(peers[1].ip, "74.125.250.129");
+        assert!(parse_capture("nothing here", 5).is_empty());
+        assert_eq!(parse_capture(cap, 1).len(), 1);
     }
 }

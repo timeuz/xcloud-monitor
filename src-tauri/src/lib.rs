@@ -138,6 +138,7 @@ pub fn run() {
             history::history_series,
             history::history_udp_runs,
             udp::run_udp_test,
+            session::detect_session_peers,
             session::measure_session_peer,
             session::history_session_runs,
             history::history_export_report,
