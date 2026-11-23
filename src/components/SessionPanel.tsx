@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2, Radar, Server } from 'lucide-react';
+import { assessSession, hopViews, levelClass } from '../domain/sessionAssessment';
 import { PeerCandidate, SessionRun, detectSessionPeers, fetchSessionRuns, measureSessionPeer } from '../services/nativeBridge';
 
 const fmt = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(1)} ms`);
@@ -26,6 +27,7 @@ export const SessionPanel: React.FC = () => {
   const [error, setError] = useState('');
   const [detecting, setDetecting] = useState(false);
   const [candidates, setCandidates] = useState<PeerCandidate[]>([]);
+  const [selectedTs, setSelectedTs] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -158,6 +160,74 @@ sudo bash find-session-peer.sh`}</pre>
       </form>
       {error && <p className="text-[11px] font-mono text-red-300">{error}</p>}
 
+      {runs.length > 0 && (() => {
+        const run = runs.find((r) => r.ts === selectedTs) ?? runs[0];
+        const a = assessSession(run);
+        const hops = hopViews(run);
+        const lc = levelClass[a.level];
+        return (
+          <div className="rounded-lg border border-cyan-900/40 bg-[#040b12] p-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs font-mono font-bold ${lc.badge}`}>
+                <span className={`w-2 h-2 rounded-full ${lc.dot}`} />
+                {a.level === 'good' ? 'BOA' : a.level === 'warn' ? 'ATENÇÃO' : a.level === 'bad' ? 'RUIM' : 'SEM DADOS'}
+              </span>
+              <span className={`text-sm font-semibold ${lc.text}`}>{a.headline}</span>
+              <span className="text-[11px] font-mono text-slate-500">
+                {run.peerIp} · {when(run.ts)}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {a.checks.map((c) => (
+                <div key={c.key} className="rounded border border-cyan-950 bg-[#06111a] p-2">
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
+                    <span>{c.label}</span>
+                    <span className={`w-2 h-2 rounded-full ${levelClass[c.level].dot}`} aria-hidden="true" />
+                  </div>
+                  <div className={`text-sm font-mono font-bold ${levelClass[c.level].text}`}>{c.value}</div>
+                  <div className="text-[11px] text-slate-500 leading-snug">{c.hint}</div>
+                </div>
+              ))}
+            </div>
+
+            {hops.length > 0 && (
+              <div className="overflow-x-auto">
+                <p className="text-[11px] font-mono text-slate-400 mb-1">
+                  Caminho até o servidor ({hops.length} saltos). O acréscimo mostra quanto latência cada salto adicionou em relação ao anterior; a linha em destaque é o maior acréscimo.
+                </p>
+                <table className="w-full text-[11px] font-mono text-slate-300">
+                  <thead>
+                    <tr className="text-left text-slate-500 border-b border-cyan-950">
+                      <th className="py-1 pr-2">Salto</th>
+                      <th className="pr-2">Endereço</th>
+                      <th className="pr-2">Nome</th>
+                      <th className="pr-2">Local / rede</th>
+                      <th className="pr-2 text-right">RTT</th>
+                      <th className="text-right">Acréscimo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hops.map((h) => (
+                      <tr key={h.ttl} className={`border-b border-cyan-950/40 ${h.isLargestJump ? 'bg-amber-950/30' : ''}`}>
+                        <td className="py-1 pr-2">{h.ttl}</td>
+                        <td className="pr-2">{h.ip}</td>
+                        <td className="pr-2 text-slate-400 max-w-[220px] truncate" title={h.name}>{h.name || '—'}</td>
+                        <td className="pr-2 text-slate-400">{h.location || '—'}</td>
+                        <td className="pr-2 text-right">{h.rttMs == null ? 'sem resposta' : `${h.rttMs.toFixed(1)} ms`}</td>
+                        <td className={`text-right ${h.deltaMs != null && h.deltaMs >= 20 ? 'text-amber-300 font-bold' : 'text-slate-400'}`}>
+                          {h.deltaMs == null ? '—' : `${h.deltaMs >= 0 ? '+' : ''}${h.deltaMs.toFixed(1)} ms`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {runs.length === 0 ? (
         <p className="text-xs font-mono text-slate-500">Nenhum servidor de sessão medido ainda.</p>
       ) : (
@@ -178,7 +248,7 @@ sudo bash find-session-peer.sh`}</pre>
               {runs.map((r) => {
                 const d = entryDelta(r);
                 return (
-                  <tr key={r.ts} className="border-b border-cyan-950/50">
+                  <tr key={r.ts} onClick={() => setSelectedTs(r.ts)} className="border-b border-cyan-950/50 cursor-pointer hover:bg-cyan-950/30" title="Clique para ver os detalhes desta medição">
                     <td className="py-1.5 pr-3">{when(r.ts)}</td>
                     <td className="pr-3">
                       {r.peerIp}
@@ -191,7 +261,7 @@ sudo bash find-session-peer.sh`}</pre>
                     <td>
                       {r.hopCount === 0 ? 'não medida' : `${r.hopCount} saltos`}
                       {r.hairpin ? <span className="text-red-300"> · desvio p/ EUA</span> : null}
-                      {r.largestJump ? <span className="text-slate-500"> · +{r.largestJump.deltaMs.toFixed(0)} ms entre {r.largestJump.fromTtl} e {r.largestJump.toTtl}</span> : null}
+                      {r.largestJump ? <span className="text-slate-500"> · +{r.largestJump.deltaMs.toFixed(0)} ms entre {r.largestJump.fromIp} (salto {r.largestJump.fromTtl}) e {r.largestJump.toIp} (salto {r.largestJump.toTtl})</span> : null}
                     </td>
                   </tr>
                 );

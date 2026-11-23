@@ -5,6 +5,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { fileURLToPath } from 'url';
 import { SessionPanel, entryDelta } from '../src/components/SessionPanel';
+import { assessSession, hopViews } from '../src/domain/sessionAssessment';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const script = path.join(root, 'scripts/find-session-peer.sh');
@@ -51,6 +52,34 @@ if (process.platform !== 'win32') {
     assert.ok(needRoot.status !== 0, 'capturing without root must fail loudly');
   }
   console.log('Confirmed: media flow found; private/multicast ignored; no guess when nothing public.');
+}
+
+console.log('\n--- TEST 5: a measurement gets a colour and the hops get names ---');
+{
+  const base: any = {
+    ts: 1, peerIp: '13.104.105.250', note: null, sent: 20, received: 20, lossPct: 0, rttP50: 40, rttP95: 44, jitter: 1.2,
+    entryRtt: 38, icmpBlocked: false, hairpin: false, hopCount: 3, largestJump: null,
+    hops: [
+      { ttl: 1, ip: '192.168.1.1', host: '192.168.1.1', rttMs: 0.5, location: 'Rede local', isAnomaly: false },
+      { ttl: 2, ip: '*', host: '*', rttMs: 0, location: '', isAnomaly: false },
+      { ttl: 3, ip: '13.104.105.250', host: 'gssv.example.net', rttMs: 40, location: 'Microsoft', isAnomaly: false },
+    ],
+  };
+  assert.strictEqual(assessSession(base).level, 'good');
+  assert.strictEqual(assessSession({ ...base, rttP50: 55 }).level, 'warn');
+  assert.strictEqual(assessSession({ ...base, rttP50: 90 }).level, 'bad');
+  assert.strictEqual(assessSession({ ...base, lossPct: 10 }).level, 'bad');
+  assert.strictEqual(assessSession({ ...base, lossPct: 5 }).level, 'warn', 'one lost ping is a warning, not a verdict');
+  assert.strictEqual(assessSession({ ...base, hairpin: true }).level, 'bad');
+  assert.strictEqual(assessSession({ ...base, icmpBlocked: true, rttP50: null, hopCount: 0, hops: [] }).level, 'unknown');
+  const views = hopViews({ hops: base.hops, largestJump: { fromTtl: 1, fromIp: 'a', toTtl: 3, toIp: 'b', deltaMs: 39.5, toRtt: 40 } });
+  assert.strictEqual(views[1].ip, '*');
+  assert.strictEqual(views[1].rttMs, null);
+  assert.strictEqual(views[2].deltaMs, 39.5, 'step is measured from the last hop that answered');
+  assert.strictEqual(views[2].isLargestJump, true);
+  assert.strictEqual(views[2].name, 'gssv.example.net');
+  assert.strictEqual(views[0].name, '', 'no name when the host is only the IP');
+  console.log('Confirmed.');
 }
 
 console.log('\n✅ ALL SESSION TESTS PASSED SUCCESSFULLY!');

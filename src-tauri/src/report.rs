@@ -350,7 +350,7 @@ fn session_html(runs: &[crate::session::SessionRun], tz: i32) -> String {
             let jump = r
                 .largest_jump
                 .as_ref()
-                .map(|j| format!("+{:.0} ms entre os saltos {} e {}", j.delta_ms, j.from_ttl, j.to_ttl))
+                .map(|j| format!("+{:.0} ms entre o salto {} ({}) e o salto {} ({})", j.delta_ms, j.from_ttl, j.from_ip, j.to_ttl, j.to_ip))
                 .unwrap_or_else(|| "—".into());
             vec![
                 esc(&fmt_local(r.ts, tz)),
@@ -365,9 +365,46 @@ fn session_html(runs: &[crate::session::SessionRun], tz: i32) -> String {
             ]
         })
         .collect();
+    // the hop-by-hop path of the most recent measurement: this is what the ISP can act on
+    let path = runs
+        .iter()
+        .find(|r| !r.hops.is_empty())
+        .map(|r| {
+            let mut prev: Option<f64> = None;
+            let hop_rows: Vec<Vec<String>> = r
+                .hops
+                .iter()
+                .map(|h| {
+                    let answered = h.rtt_ms > 0.0 && h.ip != "*";
+                    let step = match (answered, prev) {
+                        (true, Some(p)) => format!("{:+.1} ms", h.rtt_ms - p),
+                        _ => "—".into(),
+                    };
+                    if answered {
+                        prev = Some(h.rtt_ms);
+                    }
+                    vec![
+                        h.ttl.to_string(),
+                        esc(if answered { &h.ip } else { "*" }),
+                        esc(if h.host != h.ip { &h.host } else { "" }),
+                        esc(&h.location),
+                        if answered { format!("{:.1} ms", h.rtt_ms) } else { "sem resposta".into() },
+                        step,
+                    ]
+                })
+                .collect();
+            format!(
+                "<p>Caminho até o servidor da partida de {} ({}). \"Acréscimo\" é a latência adicionada em relação ao salto anterior que respondeu.</p>{}",
+                esc(&fmt_local(r.ts, tz)),
+                esc(&r.peer_ip),
+                table(&["Salto", "Endereço", "Nome", "Local / rede", "RTT", "Acréscimo"], hop_rows)
+            )
+        })
+        .unwrap_or_default();
     format!(
-        "<p>Servidor de mídia da partida (o IP muda a cada sessão), medido durante o jogo. \"Diferença para a entrada\" compara com o servidor de entrada do xCloud medido no mesmo momento: um valor grande indica que a partida foi alocada longe.</p>{}",
-        table(&["Data", "Servidor", "Nota", "RTT mediano", "RTT p95", "Perda", "Diferença para a entrada", "Rota", "Maior acréscimo"], rows)
+        "<p>Servidor de mídia da partida (o IP muda a cada sessão), medido durante o jogo. \"Diferença para a entrada\" compara com o servidor de entrada do xCloud medido no mesmo momento: um valor grande indica que a partida foi alocada longe.</p>{}{}",
+        table(&["Data", "Servidor", "Nota", "RTT mediano", "RTT p95", "Perda", "Diferença para a entrada", "Rota", "Maior acréscimo"], rows),
+        path
     )
 }
 

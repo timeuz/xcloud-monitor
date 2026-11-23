@@ -1,4 +1,4 @@
-import { StrategicEndpoint, TracerouteReport } from '../types/telemetry';
+import { RouteHop, StrategicEndpoint, TracerouteReport } from '../types/telemetry';
 
 export interface TelemetryProbeResponse {
   timestamp: number;
@@ -437,6 +437,7 @@ export interface SessionRun {
   icmpBlocked: boolean;
   hairpin: boolean;
   hopCount: number;
+  hops: RouteHop[];
   largestJump: { fromTtl: number; fromIp: string; toTtl: number; toIp: string; deltaMs: number; toRtt: number } | null;
 }
 
