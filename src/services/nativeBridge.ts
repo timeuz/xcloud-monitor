@@ -103,6 +103,7 @@ export async function searchXCloudGames(query: string): Promise<XCloudGameSearch
   if (!query || query.trim().length < 2) return [];
   requireDesktop('A busca de jogos');
   const data: any = await invokeTauri('xcloud_search_games', { query: query.trim() });
+  if (data.ok === false && data.message) throw new Error(data.message);
   return data.results || [];
 }
 

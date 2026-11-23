@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "xcloud-cyber-monitor",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "identifier": "br.com.xcloud.cybermonitor",
   "build": {
     "frontendDist": "../dist",
@@ -41,7 +41,23 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "publisher": "timeuz",
+    "homepage": "https://github.com/timeuz/xcloud-monitor",
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "copyright": "Copyright (c) timeuz",
+    "category": "Utility",
+    "shortDescription": "Monitor de telemetria e diagnostico de rede para Xbox Cloud Gaming no Brasil",
+    "longDescription": "Mede a qualidade da conexao com o Xbox Cloud Gaming e mostra onde a degradacao comeca: rede local, acesso da operadora, nucleo da operadora ou caminho ate a Microsoft. Guarda o historico apenas no seu computador e gera um relatorio com evidencias para abrir chamado na operadora.",
+    "linux": {
+      "deb": {
+        "section": "net",
+        "files": {
+          "/usr/share/metainfo/io.github.timeuz.xcloud-monitor.metainfo.xml": "linux/xcloud-cyber-monitor.metainfo.xml"
+        }
+      }
+    }
   },
   "plugins": {
     "updater": {

@@ -11,6 +11,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 const BASE_URI: &str = "https://brs.core.gssv-play-prod.xboxlive.com";
 const REGION_LABEL: &str = "brazilsouth (São Paulo)";
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; xCloudCyberMonitor)";
+const EXPIRED_SESSION_MESSAGE: &str =
+    "Sessão do xStreaming expirada ou sem acesso ao catálogo. Abra o xStreaming para renová-la e tente de novo.";
 const CATALOG_TTL: Duration = Duration::from_secs(30 * 60);
 
 struct Session {
@@ -144,6 +146,29 @@ async fn get_json(url: &str, headers: &[(&'static str, String)]) -> Option<Value
     resp.json::<Value>().await.ok()
 }
 
+async fn fetch_product_chunk(chunk: Vec<String>) {
+    let url = format!(
+        "https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds={}&market=BR&languages=pt-BR",
+        chunk.join(",")
+    );
+    let Some(data) = get_json(&url, &[]).await else { return };
+    let Some(products) = data["Products"].as_array() else { return };
+    let mut cache = product_cache().lock().unwrap();
+    for p in products {
+        let pid = p["ProductId"].as_str().unwrap_or("").to_uppercase();
+        let loc = &p["LocalizedProperties"][0];
+        let title = loc["ProductTitle"].as_str().unwrap_or(&pid).to_string();
+        let poster = loc["Images"]
+            .as_array()
+            .and_then(|imgs| {
+                imgs.iter().find(|i| matches!(i["ImagePurpose"].as_str(), Some("BoxArt") | Some("Poster")))
+            })
+            .and_then(|i| i["Uri"].as_str())
+            .map(|u| if u.starts_with("//") { format!("https:{u}") } else { u.to_string() });
+        cache.insert(pid, ProductDetails { title, poster });
+    }
+}
+
 async fn resolve_product_details(product_ids: &[String]) -> HashMap<String, ProductDetails> {
     let missing: Vec<String> = {
         let cache = product_cache().lock().unwrap();
@@ -154,28 +179,16 @@ async fn resolve_product_details(product_ids: &[String]) -> HashMap<String, Prod
             .collect()
     };
 
-    for chunk in missing.chunks(20) {
-        let url = format!(
-            "https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds={}&market=BR&languages=pt-BR",
-            chunk.join(",")
-        );
-        let Some(data) = get_json(&url, &[]).await else { continue };
-        let Some(products) = data["Products"].as_array() else { continue };
-        let mut cache = product_cache().lock().unwrap();
-        for p in products {
-            let pid = p["ProductId"].as_str().unwrap_or("").to_uppercase();
-            let loc = &p["LocalizedProperties"][0];
-            let title = loc["ProductTitle"].as_str().unwrap_or(&pid).to_string();
-            let poster = loc["Images"]
-                .as_array()
-                .and_then(|imgs| {
-                    imgs.iter().find(|i| {
-                        matches!(i["ImagePurpose"].as_str(), Some("BoxArt") | Some("Poster"))
-                    })
-                })
-                .and_then(|i| i["Uri"].as_str())
-                .map(|u| if u.starts_with("//") { format!("https:{u}") } else { u.to_string() });
-            cache.insert(pid, ProductDetails { title, poster });
+    // Chunks of 20 ids, six requests in flight at a time: the full catalog is a few dozen calls.
+    let chunks: Vec<Vec<String>> = missing.chunks(20).map(|c| c.to_vec()).collect();
+    for group in chunks.chunks(6) {
+        let tasks: Vec<_> = group
+            .iter()
+            .cloned()
+            .map(|chunk| tauri::async_runtime::spawn(fetch_product_chunk(chunk)))
+            .collect();
+        for t in tasks {
+            let _ = t.await;
         }
     }
 
@@ -186,12 +199,12 @@ async fn resolve_product_details(product_ids: &[String]) -> HashMap<String, Prod
         .collect()
 }
 
-async fn get_title_catalog(session: &Session) -> Vec<(String, String)> {
+async fn get_title_catalog(session: &Session) -> Result<Vec<(String, String)>, String> {
     {
         let guard = title_catalog().lock().unwrap();
         if let (items, Some(at)) = &*guard {
             if !items.is_empty() && at.elapsed() < CATALOG_TTL {
-                return items.clone();
+                return Ok(items.clone());
             }
         }
     }
@@ -209,10 +222,16 @@ async fn get_title_catalog(session: &Session) -> Vec<(String, String)> {
                 })
                 .collect();
             *title_catalog().lock().unwrap() = (items.clone(), Some(Instant::now()));
-            return items;
+            return Ok(items);
         }
     }
-    title_catalog().lock().unwrap().0.clone()
+    // No results: the token is usually expired (xStreaming only refreshes it while it is open).
+    let stale = title_catalog().lock().unwrap().0.clone();
+    if stale.is_empty() {
+        Err(EXPIRED_SESSION_MESSAGE.to_string())
+    } else {
+        Ok(stale)
+    }
 }
 
 fn now_ms() -> u64 {
@@ -379,6 +398,49 @@ pub async fn xcloud_recent_games() -> Value {
     json!({ "ok": true, "games": games })
 }
 
+/// Lowercase, accents folded, keeping only letters and digits ("Pokémon: X" -> "pokemonx").
+fn normalize_title(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| c.to_lowercase())
+        .map(|c| match c {
+            'á' | 'à' | 'â' | 'ã' | 'ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'í' | 'ì' | 'î' | 'ï' => 'i',
+            'ó' | 'ò' | 'ô' | 'õ' | 'ö' => 'o',
+            'ú' | 'ù' | 'û' | 'ü' => 'u',
+            'ç' => 'c',
+            other => other,
+        })
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect()
+}
+
+/// Catalog entries whose display name or internal id contains the query, name matches first.
+fn search_catalog<'a>(
+    catalog: &'a [(String, String)],
+    names: &HashMap<String, String>,
+    query: &str,
+    limit: usize,
+) -> Vec<&'a (String, String)> {
+    let needle = normalize_title(query);
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    let mut by_name = Vec::new();
+    let mut by_id = Vec::new();
+    for entry in catalog {
+        let name_hit = names
+            .get(&entry.1.to_uppercase())
+            .is_some_and(|n| normalize_title(n).contains(&needle));
+        if name_hit {
+            by_name.push(entry);
+        } else if normalize_title(&entry.0).contains(&needle) {
+            by_id.push(entry);
+        }
+    }
+    by_name.into_iter().chain(by_id).take(limit).collect()
+}
+
 #[tauri::command]
 pub async fn xcloud_search_games(query: String) -> Value {
     let q = query.trim().to_lowercase();
@@ -389,16 +451,17 @@ pub async fn xcloud_search_games(query: String) -> Value {
         return json!({ "ok": false, "message": "xStreaming não conectado", "results": [] });
     };
 
-    let normalize = |s: &str| -> String {
-        s.to_lowercase().chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+    let catalog = match get_title_catalog(&session).await {
+        Ok(c) => c,
+        Err(message) => return json!({ "ok": false, "message": message, "results": [] }),
     };
-    let needle = normalize(&q);
-    let catalog = get_title_catalog(&session).await;
-    let matches: Vec<&(String, String)> = catalog
-        .iter()
-        .filter(|(title_id, _)| normalize(title_id).contains(&needle))
-        .take(8)
-        .collect();
+    // Names come from the public display catalog, so resolve the whole catalog once (cached) and
+    // search by display name as well as by the internal title id.
+    let all_pids: Vec<String> = catalog.iter().filter(|(_, p)| !p.is_empty()).map(|(_, p)| p.clone()).collect();
+    let all_details = resolve_product_details(&all_pids).await;
+    let names: HashMap<String, String> =
+        all_details.iter().map(|(pid, d)| (pid.to_uppercase(), d.title.clone())).collect();
+    let matches = search_catalog(&catalog, &names, &q, 8);
 
     let product_ids: Vec<String> = matches
         .iter()
@@ -437,4 +500,50 @@ pub async fn xcloud_waittime(title_id: String) -> Result<Value, String> {
         "allocationSeconds": wait.allocation,
         "timestamp": now_ms(),
     }))
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::*;
+
+    fn fixture() -> (Vec<(String, String)>, HashMap<String, String>) {
+        let catalog = vec![
+            ("ALTERSXX".to_string(), "9AAA".to_string()),
+            ("FRTN".to_string(), "9BBB".to_string()),
+            ("POKE1".to_string(), "9CCC".to_string()),
+            ("NOMANSSKY".to_string(), "".to_string()),
+        ];
+        let names = HashMap::from([
+            ("9AAA".to_string(), "The Alters".to_string()),
+            ("9BBB".to_string(), "Fortnite".to_string()),
+            ("9CCC".to_string(), "Pokémon Legends".to_string()),
+        ]);
+        (catalog, names)
+    }
+
+    #[test]
+    fn finds_by_display_name_even_when_the_id_differs() {
+        let (c, n) = fixture();
+        assert_eq!(search_catalog(&c, &n, "the alters", 8)[0].0, "ALTERSXX");
+        assert_eq!(search_catalog(&c, &n, "Fortnite", 8)[0].0, "FRTN");
+    }
+
+    #[test]
+    fn folds_accents_and_punctuation() {
+        let (c, n) = fixture();
+        assert_eq!(search_catalog(&c, &n, "pokemon", 8)[0].0, "POKE1");
+    }
+
+    #[test]
+    fn falls_back_to_the_internal_id() {
+        let (c, n) = fixture();
+        assert_eq!(search_catalog(&c, &n, "nomans", 8)[0].0, "NOMANSSKY");
+    }
+
+    #[test]
+    fn empty_or_unmatched_query_returns_nothing() {
+        let (c, n) = fixture();
+        assert!(search_catalog(&c, &n, "!!", 8).is_empty());
+        assert!(search_catalog(&c, &n, "zelda", 8).is_empty());
+    }
 }

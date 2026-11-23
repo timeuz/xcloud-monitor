@@ -62,6 +62,13 @@ pub fn setup_tray(app: &tauri::App) -> bool {
     let handle = app.handle();
     let result: tauri::Result<()> = (|| {
         let history = handle.state::<History>();
+        let version = MenuItem::with_id(
+            handle,
+            "version",
+            format!("xCloud Cyber-Monitor v{}", handle.package_info().version),
+            false,
+            None::<&str>,
+        )?;
         let show = MenuItem::with_id(handle, "show", "Abrir xCloud Cyber-Monitor", true, None::<&str>)?;
         let collect = CheckMenuItem::with_id(
             handle,
@@ -72,7 +79,7 @@ pub fn setup_tray(app: &tauri::App) -> bool {
             None::<&str>,
         )?;
         let quit_item = MenuItem::with_id(handle, "quit", "Sair (para a coleta)", true, None::<&str>)?;
-        let menu = Menu::with_items(handle, &[&show, &collect, &PredefinedMenuItem::separator(handle)?, &quit_item])?;
+        let menu = Menu::with_items(handle, &[&version, &PredefinedMenuItem::separator(handle)?, &show, &collect, &PredefinedMenuItem::separator(handle)?, &quit_item])?;
 
         *handle.state::<Desktop>().collect_item.lock().unwrap_or_else(|p| p.into_inner()) = Some(collect);
 
