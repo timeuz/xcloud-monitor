@@ -3,7 +3,7 @@
 
 use crate::analysis::{Episode, Insight, Report, SegmentStats};
 use crate::history::HistoryStats;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,6 +42,7 @@ pub struct Extras {
     pub routes: Vec<RouteRunDetail>,
     pub bloats: Vec<BloatDetail>,
     pub udp: Vec<crate::history::UdpRunRow>,
+    pub sessions: Vec<crate::session::SessionRun>,
     pub stats: HistoryStats,
 }
 
@@ -255,7 +256,8 @@ fn route_html(run: &RouteRunDetail, tz: i32, heading: &str) -> String {
 }
 
 /// One step where latency is added between two consecutive responding hops.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Jump {
     pub from_ttl: u32,
     pub from_ip: String,
@@ -324,6 +326,48 @@ fn jumps_html(run: &RouteRunDetail) -> String {
     format!(
         "<h3>Onde a latência é acrescentada</h3><p>Maiores acréscimos entre saltos consecutivos (picos isolados de ICMP descartados):</p>{}",
         table(&["Saltos", "Endereços", "Acréscimo", "RTT acumulado", "Trecho"], rows)
+    )
+}
+
+fn session_html(runs: &[crate::session::SessionRun], tz: i32) -> String {
+    if runs.is_empty() {
+        return "<p>Nenhum servidor de sessão de jogo foi medido. O endereço muda a cada partida; informe-o na aba Histórico enquanto joga.</p>".into();
+    }
+    let rows = runs
+        .iter()
+        .map(|r| {
+            let vs_entry = match (r.rtt_p50, r.entry_rtt) {
+                (Some(a), Some(b)) => format!("{:+.1} ms", a - b),
+                _ => "—".into(),
+            };
+            let route = if r.hop_count == 0 {
+                "não medida".to_string()
+            } else if r.hairpin {
+                format!("{} saltos · desvio internacional", r.hop_count)
+            } else {
+                format!("{} saltos", r.hop_count)
+            };
+            let jump = r
+                .largest_jump
+                .as_ref()
+                .map(|j| format!("+{:.0} ms entre os saltos {} e {}", j.delta_ms, j.from_ttl, j.to_ttl))
+                .unwrap_or_else(|| "—".into());
+            vec![
+                esc(&fmt_local(r.ts, tz)),
+                esc(&r.peer_ip),
+                esc(r.note.as_deref().unwrap_or("")),
+                if r.icmp_blocked { "não responde a ICMP".into() } else { ms(r.rtt_p50) },
+                ms(r.rtt_p95),
+                format!("{:.1}%", r.loss_pct),
+                vs_entry,
+                esc(&route),
+                esc(&jump),
+            ]
+        })
+        .collect();
+    format!(
+        "<p>Servidor de mídia da partida (o IP muda a cada sessão), medido durante o jogo. \"Diferença para a entrada\" compara com o servidor de entrada do xCloud medido no mesmo momento: um valor grande indica que a partida foi alocada longe.</p>{}",
+        table(&["Data", "Servidor", "Nota", "RTT mediano", "RTT p95", "Perda", "Diferença para a entrada", "Rota", "Maior acréscimo"], rows)
     )
 }
 
@@ -443,7 +487,10 @@ pub fn render(report: &Report, extras: &Extras, meta: &Meta) -> String {
     html.push_str("<h2>7. Teste UDP (rota do jogo)</h2>");
     html.push_str(&udp_html(&extras.udp, tz));
 
-    html.push_str("<h2>8. Alvos medidos</h2>");
+    html.push_str("<h2>8. Servidor real da sessão de jogo</h2>");
+    html.push_str(&session_html(&extras.sessions, tz));
+
+    html.push_str("<h2>9. Alvos medidos</h2>");
     let rows = report
         .targets
         .iter()
@@ -460,7 +507,7 @@ pub fn render(report: &Report, extras: &Extras, meta: &Meta) -> String {
         .collect();
     html.push_str(&table(&["Alvo", "Amostras", "Respostas", "Mediana", "p95 típico", "Situação"], rows));
 
-    html.push_str("<h2>9. Metodologia e limitações</h2><ul>\
+    html.push_str("<h2>10. Metodologia e limitações</h2><ul>\
 <li>Latência medida por ICMP (ping), com TCP/443 como alternativa, a cada 30 s, a partir do computador do cliente. Perda = sondagens sem resposta.</li>\
 <li>Um episódio é um período de pelo menos 3 minutos com perda ≥ 20% ou mediana acima de 1,5× a base (e ≥ 15 ms). Roteador e 1º salto usam limite de +10 ms.</li>\
 <li>O primeiro salto do ISP é o primeiro endereço, depois do roteador do cliente, que aparece no traceroute.</li>\
@@ -561,6 +608,7 @@ mod tests {
             }],
             bloats: vec![],
             udp: vec![],
+            sessions: vec![],
             stats: stats(),
         });
         assert!(!html.contains("<script>alert"));
@@ -572,8 +620,9 @@ mod tests {
 
     #[test]
     fn report_has_every_section_and_the_key_numbers() {
-        let html = render_it(Extras { routes: vec![], bloats: vec![], udp: vec![], stats: stats() });
-        for section in ["1. Achados", "2. Comparação do caminho", "3. Episódios", "4. Comportamento por horário", "5. Rota", "6. Bufferbloat", "7. Teste UDP", "8. Alvos medidos", "9. Metodologia"] {
+        let html = render_it(Extras { routes: vec![], bloats: vec![], udp: vec![],
+            sessions: vec![], stats: stats() });
+        for section in ["1. Achados", "2. Comparação do caminho", "3. Episódios", "4. Comportamento por horário", "5. Rota", "6. Bufferbloat", "7. Teste UDP", "8. Servidor real", "9. Alvos medidos", "10. Metodologia"] {
             assert!(html.contains(section), "missing {section}");
         }
         assert!(html.contains("Acesso da operadora"));
@@ -592,6 +641,7 @@ mod tests {
             ],
             bloats: vec![],
             udp: vec![],
+            sessions: vec![],
             stats: stats(),
         });
         assert!(html.contains("Rota com desvio internacional"));

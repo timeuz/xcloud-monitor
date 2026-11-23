@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "test": "tsx test/resilience.test.ts && tsx test/nativeBridge.test.ts && tsx test/mapComponents.test.ts && tsx test/matrixAndAudio.test.ts && tsx test/charts.test.tsx && tsx test/version.test.ts && tsx test/offline.test.ts && tsx test/udp.test.tsx",
+    "test": "tsx test/resilience.test.ts && tsx test/nativeBridge.test.ts && tsx test/mapComponents.test.ts && tsx test/matrixAndAudio.test.ts && tsx test/charts.test.tsx && tsx test/version.test.ts && tsx test/offline.test.ts && tsx test/udp.test.tsx && tsx test/session.test.tsx",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",

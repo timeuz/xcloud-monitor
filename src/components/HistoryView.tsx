@@ -13,6 +13,7 @@ import { playUiClick } from '../services/soundEffects';
 import { ChartSeries, Mark, Shade, TimeSeriesChart } from './charts/TimeSeriesChart';
 import { HourProfileChart } from './charts/HourProfileChart';
 import { UdpPanel } from './UdpPanel';
+import { SessionPanel } from './SessionPanel';
 
 const WINDOWS = [
   { hours: 6, label: '6 h' },
@@ -332,6 +333,8 @@ export const HistoryView: React.FC = () => {
       )}
 
       <UdpPanel />
+
+      <SessionPanel />
 
       {report && (
         <div className="rounded-xl border border-cyan-900/40 bg-[#06111a] p-4 shadow-lg overflow-x-auto">

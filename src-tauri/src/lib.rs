@@ -6,6 +6,7 @@ mod history;
 mod network;
 mod report;
 mod route;
+mod session;
 mod udp;
 mod updater;
 mod xcloud;
@@ -151,6 +152,8 @@ pub fn run() {
             history::history_series,
             history::history_udp_runs,
             udp::run_udp_test,
+            session::measure_session_peer,
+            session::history_session_runs,
             history::history_export_report,
             history::history_set_enabled,
             history::history_clear,

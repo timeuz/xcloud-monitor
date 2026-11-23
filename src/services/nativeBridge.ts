@@ -465,3 +465,36 @@ export async function fetchUdpRuns(limit = 30): Promise<UdpRunRow[]> {
   requireDesktop('O histórico de testes UDP');
   return invokeTauri<UdpRunRow[]>('history_udp_runs', { limit });
 }
+
+// ---------------------------------------------------------------------------
+// Game session server (its address changes every match and is supplied by the user).
+// ---------------------------------------------------------------------------
+export interface SessionRun {
+  ts: number;
+  peerIp: string;
+  note: string | null;
+  sent: number;
+  received: number;
+  lossPct: number;
+  rttP50: number | null;
+  rttP95: number | null;
+  jitter: number | null;
+  /** xCloud entry point RTT measured by the sampler just before; null when there was none */
+  entryRtt: number | null;
+  /** the server never answered ICMP (the route may still be shown) */
+  icmpBlocked: boolean;
+  hairpin: boolean;
+  hopCount: number;
+  largestJump: { fromTtl: number; fromIp: string; toTtl: number; toIp: string; deltaMs: number; toRtt: number } | null;
+}
+
+/** Pings and traces a public IPv4 (accepts "ip", "ip:port" or tcpdump's "ip.port"). Takes up to ~1 minute. */
+export async function measureSessionPeer(peer: string, note?: string): Promise<SessionRun> {
+  requireDesktop('A medição do servidor da sessão');
+  return invokeTauri<SessionRun>('measure_session_peer', { peer, note: note ?? null });
+}
+
+export async function fetchSessionRuns(limit = 20): Promise<SessionRun[]> {
+  requireDesktop('O histórico do servidor da sessão');
+  return invokeTauri<SessionRun[]>('history_session_runs', { limit });
+}

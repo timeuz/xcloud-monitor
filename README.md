@@ -11,6 +11,11 @@ Guarda o histórico só no seu computador e gera um **relatório de evidência**
   âncoras em São Paulo, NIC.br, referências nos EUA (Miami e Dallas) e alvos **IPv6** (Cloudflare, Google, Quad9). Alvo que não responde aparece como sem resposta, nunca com valor inventado.
 - **Rota real** (`traceroute`/`tracepath`/`tracert`) e **desvio internacional (BGP hairpinning)**, detectado por nome de
   salto com código de cidade dos EUA ou por salto de latência sustentado (picos isolados de ICMP são descartados).
+- **Teste UDP:** 50 pacotes por segundo por 10 s a servidores STUN (Cloudflare, Google, Microsoft): RTT, perda, jitter e a maior
+  sequência de pacotes perdidos, em UDP (o protocolo do jogo). Não mede banda.
+- **Servidor real da sessão:** o IP da sua partida muda a cada jogo e só aparece numa captura de pacotes (precisa de root).
+  O script `scripts/find-session-peer.sh` o encontra; você cola o endereço na aba Histórico e o app mede ping e rota até ele e
+  compara com o servidor de entrada do xCloud.
 - **Bufferbloat de verdade:** satura o download e depois o upload enquanto mede a latência (nota A+ a F, vazão, latência do
   roteador sob carga). Pede confirmação: usa até ~330 MB e conecta à Cloudflare.
 - **Fila do xCloud** do jogo que você abriu, usando a sessão do xStreaming instalado (somente leitura do token local).
@@ -77,7 +82,7 @@ O mapa usa os contornos do Natural Earth (domínio público).
 
 - **ICMP não é tráfego de jogo.** A operadora pode alegar prioridade diferente; confirme os números com uma ferramenta
   independente (NIC.br, Measurement Lab).
-- O servidor da sessão de jogo muda a cada partida e só é visível com captura de pacotes; os alvos fixos são a base comparável.
+- O servidor da sessão muda a cada partida; os alvos fixos são a base comparável e a medição do servidor real é manual (acima).
 - Alvo que bloqueia ICMP e TCP aparece sem resposta. A lista foi revisada medindo candidatos reais; se algum parar de responder, troque-o em `STRATEGIC_TARGETS` (`src-tauri/src/network.rs`).
 - No Linux, só o AppImage se atualiza sozinho. Os instaladores de Windows e macOS ainda não têm assinatura de código do
   sistema (veja `docs/RELEASE.md`).
