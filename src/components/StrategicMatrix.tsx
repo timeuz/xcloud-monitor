@@ -19,7 +19,7 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
   isHairpinning,
 }) => {
   const [inputHost, setInputHost] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'borda_brasil' | 'azure_brazilsouth' | 'ix_nacional' | 'referencia_internacional'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'borda_brasil' | 'azure_brazilsouth' | 'ix_nacional' | 'referencia_internacional' | 'ipv6'>('all');
 
   const handleAddHost = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +98,7 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
               : 'text-slate-400 hover:text-slate-200 bg-[#040b12]'
           }`}
         >
-          1. Borda Brasil AS8075
+          1. São Paulo (borda e âncoras)
         </button>
         <button
           onClick={() => {
@@ -124,7 +124,7 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
               : 'text-slate-400 hover:text-slate-200 bg-[#040b12]'
           }`}
         >
-          3. IX Nacionais
+          3. Brasil (NIC.br)
         </button>
         <button
           onClick={() => {
@@ -138,6 +138,19 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
           }`}
         >
           4. Referência EUA (Hairpinning)
+        </button>
+        <button
+          onClick={() => {
+            setSelectedFilter('ipv6');
+            playUiClick();
+          }}
+          className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
+            selectedFilter === 'ipv6'
+              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+              : 'text-slate-400 hover:text-slate-200 bg-[#040b12]'
+          }`}
+        >
+          5. IPv6
         </button>
       </div>
 
@@ -179,6 +192,13 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/40">
+            {filteredEndpoints.length === 0 && (
+              <tr>
+                <td colSpan={6} className="py-4 px-3 text-center text-slate-500">
+                  Aguardando a primeira medição...
+                </td>
+              </tr>
+            )}
             {filteredEndpoints.map((ep) => {
               const isEua = ep.category === 'referencia_internacional';
               const rttFormatted = ep.rttMs !== null ? `${ep.rttMs.toFixed(1)}ms` : 'TIMEOUT';
@@ -217,12 +237,14 @@ export const StrategicMatrix: React.FC<StrategicMatrixProps> = ({
               return (
                 <tr key={ep.id} className="hover:bg-cyan-950/20 transition-colors">
                   <td className="py-2 px-3 text-slate-400">
-                    {ep.category === 'borda_brasil' ? (
-                      <span className="text-cyan-300">Borda BR</span>
+                    {ep.category === 'ipv6' ? (
+                      <span className="text-sky-300">IPv6</span>
+                    ) : ep.category === 'borda_brasil' ? (
+                      <span className="text-cyan-300">São Paulo</span>
                     ) : ep.category === 'azure_brazilsouth' ? (
                       <span className="text-emerald-300">Datacenter SP</span>
                     ) : ep.category === 'ix_nacional' ? (
-                      <span className="text-purple-300">IX Nacional</span>
+                      <span className="text-purple-300">Brasil</span>
                     ) : (
                       <span className="text-amber-300">Ref. EUA</span>
                     )}

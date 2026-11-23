@@ -8,7 +8,7 @@ Guarda o histórico só no seu computador e gera um **relatório de evidência**
 
 - **Latência, jitter e perda** a cada 30 s, em segundo plano, até três pontos do mesmo caminho ao mesmo tempo:
   seu **roteador**, o **1º salto da operadora** (descoberto pelo traceroute) e o **servidor de entrada do xCloud**, mais
-  alvos de borda (IX.br, Equinix) e de referência nos EUA. Alvo que não responde aparece como sem resposta, nunca com valor inventado.
+  âncoras em São Paulo, NIC.br, referências nos EUA (Miami e Dallas) e alvos **IPv6** (Cloudflare, Google, Quad9). Alvo que não responde aparece como sem resposta, nunca com valor inventado.
 - **Rota real** (`traceroute`/`tracepath`/`tracert`) e **desvio internacional (BGP hairpinning)**, detectado por nome de
   salto com código de cidade dos EUA ou por salto de latência sustentado (picos isolados de ICMP são descartados).
 - **Bufferbloat de verdade:** satura o download e depois o upload enquanto mede a latência (nota A+ a F, vazão, latência do
@@ -78,7 +78,7 @@ O mapa usa os contornos do Natural Earth (domínio público).
 - **ICMP não é tráfego de jogo.** A operadora pode alegar prioridade diferente; confirme os números com uma ferramenta
   independente (NIC.br, Measurement Lab).
 - O servidor da sessão de jogo muda a cada partida e só é visível com captura de pacotes; os alvos fixos são a base comparável.
-- Vários alvos de referência bloqueiam ICMP e TCP e aparecem sem resposta.
+- Alvo que bloqueia ICMP e TCP aparece sem resposta. A lista foi revisada medindo candidatos reais; se algum parar de responder, troque-o em `STRATEGIC_TARGETS` (`src-tauri/src/network.rs`).
 - No Linux, só o AppImage se atualiza sozinho. Os instaladores de Windows e macOS ainda não têm assinatura de código do
   sistema (veja `docs/RELEASE.md`).
 

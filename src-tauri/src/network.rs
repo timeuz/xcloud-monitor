@@ -33,10 +33,6 @@ pub struct TelemetryProbeResponse {
     pub azure_rtt: Option<f64>,
     #[serde(rename = "usMiamiRtt")]
     pub us_miami_rtt: Option<f64>,
-    #[serde(rename = "usAtlantaRtt")]
-    pub us_atlanta_rtt: Option<f64>,
-    #[serde(rename = "usAshburnRtt")]
-    pub us_ashburn_rtt: Option<f64>,
     #[serde(rename = "customHost")]
     pub custom_host: Option<CustomHostResult>,
 }
@@ -62,6 +58,21 @@ pub struct XCloudStatusResponse {
     pub peering_health: String,
 }
 
+/// Ids measured by older versions and since retired (they never answered, were duplicates of another
+/// target, or were not representative). Their stored rows are dropped when the history opens.
+pub const RETIRED_TARGETS: &[&str] = &[
+    "xcloud_brs_direct",
+    "xcloud_gssv_web",
+    "ix_sp_v4_1",
+    "equinix_sp_v4_1",
+    "ix_rj",
+    "ix_campinas",
+    "ix_fortaleza",
+    "us_equinix_miami",
+    "us_equinix_atlanta",
+    "us_equinix_ashburn",
+];
+
 struct TargetDef {
     id: &'static str,
     label: &'static str,
@@ -72,13 +83,6 @@ struct TargetDef {
 
 const STRATEGIC_TARGETS: &[TargetDef] = &[
     TargetDef {
-        id: "xcloud_brs_direct",
-        label: "xCloud Cluster Brasil Sul (IP Direto)",
-        host: "191.235.228.36",
-        port: 443,
-        category: "azure_brazilsouth",
-    },
-    TargetDef {
         id: "xcloud_gssv_prod",
         label: "xCloud Streaming (GSSV Xbox Live)",
         host: "xgpu.gssv-play-prod.xboxlive.com",
@@ -86,74 +90,81 @@ const STRATEGIC_TARGETS: &[TargetDef] = &[
         category: "azure_brazilsouth",
     },
     TargetDef {
-        id: "xcloud_gssv_web",
-        label: "xCloud Web F2P (GSSV Play Web)",
-        host: "xgpuwebf2p.gssv-play-prod.xboxlive.com",
-        port: 443,
-        category: "azure_brazilsouth",
-    },
-    TargetDef {
-        id: "ix_sp_v4_1",
-        label: "IX.br SP IPv4 #1 (AS8075)",
-        host: "187.16.218.144",
-        port: 443,
-        category: "borda_brasil",
-    },
-    TargetDef {
         id: "ix_sp_v4_2",
-        label: "IX.br SP IPv4 #2 (AS8075)",
+        label: "IX.br SP: peering Microsoft (AS8075)",
         host: "187.16.218.139",
         port: 443,
         category: "borda_brasil",
     },
     TargetDef {
-        id: "equinix_sp_v4_1",
-        label: "Equinix SP Barueri SP1-4",
-        host: "64.191.233.147",
+        id: "sp_google_dns",
+        label: "São Paulo: Google (8.8.8.8)",
+        host: "8.8.8.8",
         port: 443,
         category: "borda_brasil",
     },
     TargetDef {
-        id: "ix_rj",
-        label: "IX.br Rio de Janeiro",
-        host: "45.68.80.73",
+        id: "sp_cloudflare",
+        label: "São Paulo: Cloudflare (1.1.1.1)",
+        host: "1.1.1.1",
+        port: 443,
+        category: "borda_brasil",
+    },
+    TargetDef {
+        id: "sp_vultr",
+        label: "São Paulo: Vultr (datacenter)",
+        host: "sao-br-ping.vultr.com",
+        port: 443,
+        category: "borda_brasil",
+    },
+    TargetDef {
+        id: "nicbr_registro",
+        label: "NIC.br: registro.br",
+        host: "registro.br",
         port: 443,
         category: "ix_nacional",
     },
     TargetDef {
-        id: "ix_campinas",
-        label: "IX.br Campinas",
-        host: "200.192.108.42",
+        id: "nicbr_dns",
+        label: "NIC.br: a.dns.br",
+        host: "a.dns.br",
         port: 443,
         category: "ix_nacional",
     },
     TargetDef {
-        id: "ix_fortaleza",
-        label: "IX.br Fortaleza",
-        host: "45.68.74.84",
-        port: 443,
-        category: "ix_nacional",
-    },
-    TargetDef {
-        id: "us_equinix_miami",
-        label: "Ref. EUA: Equinix Miami",
-        host: "198.32.242.188",
+        id: "us_miami",
+        label: "Ref. EUA: Miami (Leaseweb)",
+        host: "speedtest.mia11.us.leaseweb.net",
         port: 443,
         category: "referencia_internacional",
     },
     TargetDef {
-        id: "us_equinix_atlanta",
-        label: "Ref. EUA: Equinix Atlanta (CIX-ATL)",
-        host: "198.32.182.105",
+        id: "us_dallas",
+        label: "Ref. EUA: Dallas (Leaseweb)",
+        host: "speedtest.dal13.us.leaseweb.net",
         port: 443,
         category: "referencia_internacional",
     },
     TargetDef {
-        id: "us_equinix_ashburn",
-        label: "Ref. EUA: Equinix Ashburn (IX-2572)",
-        host: "206.126.236.148",
+        id: "cloudflare_v6",
+        label: "IPv6: Cloudflare",
+        host: "2606:4700:4700::1111",
         port: 443,
-        category: "referencia_internacional",
+        category: "ipv6",
+    },
+    TargetDef {
+        id: "google_v6",
+        label: "IPv6: Google",
+        host: "2001:4860:4860::8888",
+        port: 443,
+        category: "ipv6",
+    },
+    TargetDef {
+        id: "quad9_v6",
+        label: "IPv6: Quad9",
+        host: "2620:fe::fe",
+        port: 443,
+        category: "ipv6",
     },
 ];
 
@@ -161,31 +172,56 @@ const STRATEGIC_TARGETS: &[TargetDef] = &[
 pub fn probe_icmp(host: &str) -> Option<f64> {
     let safe_host: String = host
         .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-')
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(*c, '.' | '-' | ':'))
         .collect();
 
     if safe_host.is_empty() {
         return None;
     }
+    let v6 = safe_host.contains(':');
 
-    #[cfg(target_os = "windows")]
-    let args: Vec<&str> = vec!["-n", "2", "-w", "800", &safe_host];
-    #[cfg(target_os = "macos")]
-    let args: Vec<&str> = vec!["-c", "2", "-W", "1000", &safe_host];
-    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
-    let args: Vec<&str> = vec!["-c", "2", "-i", "0.2", "-W", "1", &safe_host];
+    let run = |program: &str, args: Vec<String>| -> Option<f64> {
+        let mut cmd = Command::new(program);
+        cmd.args(&args);
+        // Without this, every probe flashes a console window in the GUI app on Windows.
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let output = cmd.output().ok()?;
+        parse_ping_output(&String::from_utf8_lossy(&output.stdout))
+    };
+    let own = |v: &[&str]| -> Vec<String> { v.iter().map(|s| s.to_string()).collect() };
 
-    let mut cmd = Command::new("ping");
-    cmd.args(&args);
-    // Without this, every probe flashes a console window in the GUI app on Windows.
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        let mut args = own(&["-n", "2", "-w", "800"]);
+        if v6 {
+            args.insert(0, "-6".into());
+        }
+        args.push(safe_host);
+        run("ping", args)
     }
-    let output = cmd.output().ok()?;
-
-    parse_ping_output(&String::from_utf8_lossy(&output.stdout))
+    #[cfg(target_os = "macos")]
+    {
+        if v6 {
+            run("ping6", own(&["-c", "2", &safe_host]))
+        } else {
+            run("ping", own(&["-c", "2", "-W", "1000", &safe_host]))
+        }
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        let args = own(&["-c", "2", "-i", "0.2", "-W", "1", &safe_host]);
+        // iputils `ping` handles IPv6 literals itself; older/minimal systems ship a separate `ping6`
+        let first = run("ping", args.clone());
+        if first.is_none() && v6 {
+            run("ping6", args)
+        } else {
+            first
+        }
+    }
 }
 
 /// Extracts the average RTT (ms) from `ping` output. Locale-independent: Windows prints
@@ -248,7 +284,7 @@ pub fn parse_ping_output(text: &str) -> Option<f64> {
 
 /// Measures round-trip time via low-level TCP socket handshake
 pub fn probe_tcp(host: &str, port: u16) -> Option<f64> {
-    let addrs: Vec<SocketAddr> = format!("{}:{}", host, port).to_socket_addrs().ok()?.collect();
+    let addrs: Vec<SocketAddr> = (host, port).to_socket_addrs().ok()?.collect();
     if addrs.is_empty() {
         return None;
     }
@@ -373,9 +409,7 @@ pub fn probe_all_strategic(custom_host: Option<String>) -> TelemetryProbeRespons
     };
     let sp_edge_rtt = min_rtt("borda_brasil");
     let azure_rtt = min_rtt("azure_brazilsouth");
-    let us_miami_rtt = rtt_of("us_equinix_miami");
-    let us_atlanta_rtt = rtt_of("us_equinix_atlanta");
-    let us_ashburn_rtt = rtt_of("us_equinix_ashburn");
+    let us_miami_rtt = rtt_of("us_miami");
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -388,8 +422,6 @@ pub fn probe_all_strategic(custom_host: Option<String>) -> TelemetryProbeRespons
         sp_edge_rtt,
         azure_rtt,
         us_miami_rtt,
-        us_atlanta_rtt,
-        us_ashburn_rtt,
         custom_host: custom_result,
     }
 }

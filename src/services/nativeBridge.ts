@@ -13,8 +13,6 @@ export interface TelemetryProbeResponse {
   spEdgeRtt: number | null;
   azureRtt: number | null;
   usMiamiRtt: number | null;
-  usAtlantaRtt: number | null;
-  usAshburnRtt: number | null;
   customHost?: {
     host: string;
     rttMs: number | null;

@@ -221,6 +221,14 @@ impl History {
             .unwrap_or_default();
         conn.execute_batch("PRAGMA synchronous=NORMAL;").map_err(|e| e.to_string())?;
         conn.execute_batch(SCHEMA).map_err(|e| e.to_string())?;
+        // Targets retired from the probe list only ever hold unanswered or duplicate rows: drop them.
+        for table in ["samples", "hourly"] {
+            let placeholders = vec!["?"; network::RETIRED_TARGETS.len()].join(",");
+            let _ = conn.execute(
+                &format!("DELETE FROM {table} WHERE target_id IN ({placeholders})"),
+                rusqlite::params_from_iter(network::RETIRED_TARGETS.iter()),
+            );
+        }
         // v2 added columns; CREATE TABLE IF NOT EXISTS does not touch existing tables, so add them
         // explicitly. A duplicate-column error just means the table is already current.
         let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap_or(0);
@@ -999,7 +1007,7 @@ mod tests {
     fn series_buckets_losses_picks_the_best_primary_and_skips_empty_targets() {
         let h = History::open_in_memory().unwrap();
         let now = 100 * 24 * HOUR;
-        // 2 hours of 30 s samples: gateway always answers, xcloud_gssv_web answers, prod mostly lost
+        // 2 hours of 30 s samples: the gateway always answers, the xCloud entry loses 25%, a stray target is ignored
         for i in 0..240 {
             let ts = now - 2 * HOUR + i * 30;
             let lost = i % 4 == 0;
@@ -1007,8 +1015,8 @@ mod tests {
                 ts,
                 &[
                     ep(analysis::GATEWAY_ID, Some(0.5)),
-                    ep("xcloud_gssv_web", if lost { None } else { Some(40.0) }),
-                    ep("xcloud_gssv_prod", if i < 5 { Some(30.0) } else { None }),
+                    ep("xcloud_gssv_prod", if lost { None } else { Some(40.0) }),
+                    ep("sp_google_dns", Some(39.0)),
                 ],
             )
             .unwrap();
@@ -1018,7 +1026,7 @@ mod tests {
         let roles: Vec<&str> = r.series.iter().map(|s| s.role.as_str()).collect();
         assert_eq!(roles, vec!["local_gateway", "xcloud"]); // no ISP-hop data: no series, no fake line
         let x = r.series.iter().find(|s| s.role == "xcloud").unwrap();
-        assert_eq!(x.id, "xcloud_gssv_web"); // answered most
+        assert_eq!(x.id, "xcloud_gssv_prod");
         let total: i64 = x.points.iter().map(|p| p.n).sum();
         assert_eq!(total, 240);
         let avg_loss: f64 = x.points.iter().map(|p| p.loss_pct * p.n as f64).sum::<f64>() / total as f64;
@@ -1056,5 +1064,19 @@ mod tests {
         assert!(!h.close_to_tray());
         h.clear().unwrap();
         assert!(!h.close_to_tray(), "wiping measurements must not reset preferences");
+    }
+
+    #[test]
+    fn rows_of_retired_targets_are_purged_when_the_database_opens() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA).unwrap();
+        conn.execute("INSERT INTO samples(ts,target_id,rtt_ms) VALUES(1,'ix_rj',NULL),(1,'xcloud_gssv_prod',40.0),(1,'us_equinix_miami',NULL)", []).unwrap();
+        conn.execute("INSERT INTO hourly(hour_ts,target_id,n,n_lost) VALUES(0,'xcloud_brs_direct',120,0),(0,'xcloud_gssv_prod',120,0)", []).unwrap();
+        let h = History::init(conn, PathBuf::new()).unwrap();
+        let c = h.lock();
+        let left: Vec<String> = c.prepare("SELECT target_id FROM samples").unwrap().query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect();
+        assert_eq!(left, vec!["xcloud_gssv_prod"]);
+        let hourly: i64 = c.query_row("SELECT COUNT(*) FROM hourly", [], |r| r.get(0)).unwrap();
+        assert_eq!(hourly, 1);
     }
 }
