@@ -87,21 +87,8 @@ function Dashboard() {
   const candidateRankRef = useRef<{ rank: GamingRank; count: number }>({ rank: 'S', count: 0 });
   const [stableRank, setStableRank] = useState<GamingRank>('S');
 
-  // Strategic Endpoints State (Directly calibrated with xcloud.sh targets)
-  const [endpoints, setEndpoints] = useState<StrategicEndpoint[]>([
-    { id: 'xcloud_brs_direct', label: 'Cluster Brasil Sul (IP Direto)', host: '191.235.228.36', category: 'azure_brazilsouth', rttMs: 35.4, online: true, status: 'BOA' },
-    { id: 'xcloud_gssv_prod', label: 'xCloud Streaming (GSSV Prod)', host: 'xgpu.gssv-play-prod.xboxlive.com', category: 'azure_brazilsouth', rttMs: 35.6, online: true, status: 'BOA' },
-    { id: 'xcloud_gssv_web', label: 'xCloud Web F2P (GSSV Web)', host: 'xgpuwebf2p.gssv-play-prod.xboxlive.com', category: 'azure_brazilsouth', rttMs: 35.4, online: true, status: 'BOA' },
-    { id: 'ix_sp_v4_1', label: 'IX.br SP IPv4 #1 (AS8075)', host: '187.16.218.144', category: 'borda_brasil', rttMs: 35.5, online: true, status: 'BOA' },
-    { id: 'ix_sp_v4_2', label: 'IX.br SP IPv4 #2 (AS8075)', host: '187.16.218.139', category: 'borda_brasil', rttMs: 35.3, online: true, status: 'BOA' },
-    { id: 'equinix_sp_v4_1', label: 'Equinix SP Barueri SP1-4', host: '64.191.233.147', category: 'borda_brasil', rttMs: 36.1, online: true, status: 'BOA' },
-    { id: 'ix_rj', label: 'IX.br Rio de Janeiro', host: '45.68.80.73', category: 'ix_nacional', rttMs: 22.4, online: true, status: 'BOA' },
-    { id: 'ix_campinas', label: 'IX.br Campinas', host: '200.192.108.42', category: 'ix_nacional', rttMs: 34.8, online: true, status: 'BOA' },
-    { id: 'ix_fortaleza', label: 'IX.br Fortaleza', host: '45.68.74.84', category: 'ix_nacional', rttMs: 58.2, online: true, status: 'ATENÇÃO' },
-    { id: 'us_equinix_miami', label: 'Ref. EUA: Equinix Miami', host: '198.32.242.188', category: 'referencia_internacional', rttMs: 118.5, online: true, status: 'REF-EUA' },
-    { id: 'us_equinix_atlanta', label: 'Ref. EUA: Equinix Atlanta (CIX-ATL)', host: '198.32.182.105', category: 'referencia_internacional', rttMs: 134.0, online: true, status: 'REF-EUA' },
-    { id: 'us_equinix_ashburn', label: 'Ref. EUA: Equinix Ashburn (IX-2572)', host: '206.126.236.148', category: 'referencia_internacional', rttMs: 142.6, online: true, status: 'REF-EUA' },
-  ]);
+  // Measured endpoints; empty until the first probe answers (no placeholder values)
+  const [endpoints, setEndpoints] = useState<StrategicEndpoint[]>([]);
 
   const [customHostResult, setCustomHostResult] = useState<{ host: string; rttMs: number | null; online: boolean } | null>(null);
 

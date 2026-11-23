@@ -41,7 +41,7 @@ const US_POP_TOKENS: &[(&str, &str)] = &[
     ("sjc", "San Jose"),
 ];
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RouteHop {
     pub ttl: u32,
@@ -260,8 +260,12 @@ fn location_label(hop: &ParsedHop, analysis: &Analysis) -> String {
 }
 
 pub fn build_response(parsed: Vec<ParsedHop>, source: &str) -> TracerouteResponse {
+    build_response_for(parsed, source, TRACE_TARGET.parse().expect("valid target"), TRACE_TARGET_LABEL.into())
+}
+
+/// Same analysis for any destination (the default xCloud entry point, or a game session's media server).
+pub fn build_response_for(parsed: Vec<ParsedHop>, source: &str, target_ip: Ipv4Addr, target_label: String) -> TracerouteResponse {
     let analysis = analyze_route(&parsed);
-    let target_ip: Ipv4Addr = TRACE_TARGET.parse().expect("valid target");
     let reached = parsed.iter().any(|h| h.ip == Some(target_ip));
     let hop_count = parsed.iter().filter(|h| h.ip.is_some()).map(|h| h.ttl).max().unwrap_or(0) as usize;
 
@@ -299,7 +303,7 @@ pub fn build_response(parsed: Vec<ParsedHop>, source: &str) -> TracerouteRespons
     let measured_at = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
 
     TracerouteResponse {
-        target: TRACE_TARGET_LABEL.into(),
+        target: target_label,
         is_hairpinning: analysis.is_hairpinning,
         hop_count,
         hops,
@@ -359,20 +363,21 @@ fn run_with_deadline(program: &str, args: &[&str]) -> Result<String, RunError> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-fn tools() -> Vec<(&'static str, Vec<&'static str>)> {
+fn tools(target: &str) -> Vec<(&'static str, Vec<String>)> {
+    let own = |v: &[&str]| -> Vec<String> { v.iter().map(|s| s.to_string()).chain(std::iter::once(target.to_string())).collect() };
     #[cfg(target_os = "windows")]
     {
-        vec![("tracert", vec!["-h", MAX_HOPS, "-w", "800", TRACE_TARGET])]
+        vec![("tracert", own(&["-h", MAX_HOPS, "-w", "800"]))]
     }
     #[cfg(target_os = "macos")]
     {
-        vec![("traceroute", vec!["-m", MAX_HOPS, "-w", "1", "-q", "1", TRACE_TARGET])]
+        vec![("traceroute", own(&["-m", MAX_HOPS, "-w", "1", "-q", "1"]))]
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         vec![
-            ("traceroute", vec!["-m", MAX_HOPS, "-w", "1", "-q", "1", TRACE_TARGET]),
-            ("tracepath", vec!["-n", "-m", MAX_HOPS, TRACE_TARGET]),
+            ("traceroute", own(&["-m", MAX_HOPS, "-w", "1", "-q", "1"])),
+            ("tracepath", own(&["-n", "-m", MAX_HOPS])),
         ]
     }
 }
@@ -395,15 +400,21 @@ impl Drop for RunningGuard {
 }
 
 pub fn measure_route() -> Result<TracerouteResponse, String> {
+    measure_route_to(TRACE_TARGET.parse().expect("valid target"), TRACE_TARGET_LABEL.into())
+}
+
+/// Traceroute to any IPv4 destination. Only one measurement runs at a time.
+pub fn measure_route_to(target: Ipv4Addr, label: String) -> Result<TracerouteResponse, String> {
     let _guard = RunningGuard::acquire().ok_or_else(|| "Medição de rota já em andamento.".to_string())?;
 
     let mut tried: Vec<&str> = Vec::new();
-    for (program, args) in tools() {
-        match run_with_deadline(program, &args) {
+    for (program, args) in tools(&target.to_string()) {
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        match run_with_deadline(program, &refs) {
             Ok(text) => {
                 let parsed = parse_trace_output(&text);
                 if parsed.iter().any(|h| h.ip.is_some()) {
-                    return Ok(build_response(parsed, program));
+                    return Ok(build_response_for(parsed, program, target, label));
                 }
                 tried.push(program);
             }

@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Targets that are the entry point of the xCloud streaming region, best proxy for game traffic.
-pub const PRIMARY_CANDIDATES: &[&str] = &["xcloud_gssv_prod", "xcloud_brs_direct", "xcloud_gssv_web"];
+pub const PRIMARY_CANDIDATES: &[&str] = &["xcloud_gssv_prod"];
 
 const MIN_SAMPLES_FOR_STATUS: i64 = 20;
 const UNREACHABLE_RATE: f64 = 0.05;
@@ -41,6 +41,11 @@ const LOCAL_CLEAN_P95_MS: f64 = 5.0;
 const LOCAL_BAD_ANSWER_RATE: f64 = 0.99;
 const LOCAL_BAD_P95_MS: f64 = 15.0;
 const LOCAL_MIN_HOURS: usize = 24;
+
+/// Probe ids of IPv6 targets end with this suffix.
+const V6_SUFFIX: &str = "_v6";
+/// IPv4 vs IPv6 latency to the same provider is worth mentioning from this difference on.
+const V6_DIFF_MS: f64 = 10.0;
 
 const LOSS_WARN_PCT: f64 = 1.0;
 const LOSS_CRIT_PCT: f64 = 5.0;
@@ -903,7 +908,7 @@ pub fn analyze(inputs: &Inputs, p: Params) -> Report {
     let dead: Vec<&TargetQuality> =
         quality
             .iter()
-            .filter(|q| q.status == "unreachable" && q.samples >= MIN_SAMPLES_TO_DROP && q.id != GATEWAY_ID && q.id != ISP_ID)
+            .filter(|q| q.status == "unreachable" && q.samples >= MIN_SAMPLES_TO_DROP && q.id != GATEWAY_ID && q.id != ISP_ID && !q.id.ends_with(V6_SUFFIX))
             .collect();
     if !dead.is_empty() {
         let names: Vec<&str> = dead.iter().map(|q| q.id.as_str()).collect();
@@ -914,6 +919,34 @@ pub fn analyze(inputs: &Inputs, p: Params) -> Report {
             format!("Sem resposta em mais de 95% das sondagens: {}.", names.join(", ")),
             Some("Estes alvos bloqueiam ICMP e TCP; vale removê-los ou trocá-los por outros que respondam."),
         ));
+    }
+
+    // IPv6: does it work at all, and is it slower or faster than IPv4 to the same provider?
+    let v6: Vec<&TargetQuality> = quality.iter().filter(|q| q.id.ends_with(V6_SUFFIX)).collect();
+    if v6.len() >= 2 && v6.iter().all(|q| q.status == "unreachable" && q.samples >= MIN_SAMPLES_TO_DROP) {
+        insights.push(insight(
+            "ipv6-down",
+            "info",
+            "IPv6 não funciona neste acesso".into(),
+            "Nenhum alvo IPv6 respondeu no período, enquanto os alvos IPv4 respondem.".into(),
+            Some("Normal se a operadora não oferece IPv6. Se oferece, vale ativar no roteador: o caminho IPv6 às vezes é melhor."),
+        ));
+    } else {
+        for (v4_id, v6_id, name) in [("sp_cloudflare", "cloudflare_v6", "a Cloudflare"), ("sp_google_dns", "google_v6", "o Google")] {
+            let find = |id: &str| quality.iter().find(|q| q.id == id && q.status == "ok").and_then(|q| q.p50);
+            if let (Some(a), Some(b)) = (find(v4_id), find(v6_id)) {
+                let diff = b - a;
+                if diff.abs() >= V6_DIFF_MS {
+                    insights.push(insight(
+                        &format!("ipv6-vs-ipv4-{v6_id}"),
+                        "info",
+                        format!("IPv6 é {:.0} ms {} que IPv4 até {name}", diff.abs(), if diff > 0.0 { "mais lento" } else { "mais rápido" }),
+                        format!("Mediana de {a:.1} ms em IPv4 contra {b:.1} ms em IPv6."),
+                        Some("O xCloud usa IPv4 hoje; a diferença indica que a operadora trata os dois caminhos de forma diferente."),
+                    ));
+                }
+            }
+        }
     }
 
     Report {
@@ -1215,5 +1248,45 @@ mod tests {
         let r = analyze(&Inputs { hours: &hours, raw: &[], routes: &[], bloats: &[] }, params(3));
         let dead = r.insights.iter().find(|i| i.id == "dead-targets").unwrap();
         assert!(!dead.detail.contains(GATEWAY_ID));
+    }
+
+    fn v6_rows(id: &str, p50: Option<f64>, lost: i64, hours: i64) -> Vec<HourRow> {
+        (0..hours)
+            .map(|h| HourRow {
+                hour_ts: BASE + h * 3600,
+                target_id: id.into(),
+                n: 120,
+                n_lost: lost,
+                p50,
+                p95: p50.map(|v| v + 3.0),
+                jitter: Some(1.0),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn ipv6_that_never_answers_is_one_insight_not_dead_targets() {
+        let mut hours = synthetic_hours(3, -180);
+        for id in ["cloudflare_v6", "google_v6", "quad9_v6"] {
+            hours.extend(v6_rows(id, None, 120, 72));
+        }
+        let r = analyze(&Inputs { hours: &hours, raw: &[], routes: &[], bloats: &[] }, params(3));
+        assert!(r.insights.iter().any(|i| i.id == "ipv6-down"));
+        let dead = r.insights.iter().find(|i| i.id == "dead-targets").unwrap();
+        assert!(!dead.detail.contains("_v6"), "{}", dead.detail);
+    }
+
+    #[test]
+    fn ipv6_slower_than_ipv4_to_the_same_provider_is_reported() {
+        let mut hours = synthetic_hours(3, -180);
+        hours.extend(v6_rows("sp_cloudflare", Some(45.0), 0, 72));
+        hours.extend(v6_rows("cloudflare_v6", Some(57.0), 0, 72));
+        hours.extend(v6_rows("sp_google_dns", Some(40.0), 0, 72));
+        hours.extend(v6_rows("google_v6", Some(41.0), 0, 72)); // within 10 ms: silent
+        let r = analyze(&Inputs { hours: &hours, raw: &[], routes: &[], bloats: &[] }, params(3));
+        let slow = r.insights.iter().find(|i| i.id == "ipv6-vs-ipv4-cloudflare_v6").unwrap();
+        assert!(slow.title.contains("12 ms mais lento") && slow.title.contains("Cloudflare"), "{}", slow.title);
+        assert!(!r.insights.iter().any(|i| i.id == "ipv6-vs-ipv4-google_v6"));
+        assert!(!r.insights.iter().any(|i| i.id == "ipv6-down"));
     }
 }

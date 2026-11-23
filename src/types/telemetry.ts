@@ -38,7 +38,7 @@ export interface StrategicEndpoint {
   id: string;
   label: string;
   host: string;
-  category: 'borda_brasil' | 'azure_brazilsouth' | 'ix_nacional' | 'referencia_internacional';
+  category: 'borda_brasil' | 'azure_brazilsouth' | 'ix_nacional' | 'referencia_internacional' | 'ipv6';
   rttMs: number | null;
   online: boolean;
   status: ConnectionQuality | 'TIMEOUT' | 'REF-EUA';

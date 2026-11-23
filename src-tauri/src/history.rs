@@ -60,6 +60,36 @@ CREATE TABLE IF NOT EXISTS route_runs (
     evidence TEXT,
     hops_json TEXT
 );
+CREATE TABLE IF NOT EXISTS session_runs (
+    ts INTEGER PRIMARY KEY,
+    peer_ip TEXT NOT NULL,
+    note TEXT,
+    sent INTEGER NOT NULL,
+    received INTEGER NOT NULL,
+    loss_pct REAL NOT NULL,
+    rtt_p50 REAL,
+    rtt_p95 REAL,
+    jitter REAL,
+    entry_rtt REAL,
+    icmp_blocked INTEGER NOT NULL,
+    hairpin INTEGER NOT NULL,
+    hop_count INTEGER NOT NULL,
+    hops_json TEXT
+);
+CREATE TABLE IF NOT EXISTS udp_runs (
+    ts INTEGER NOT NULL,
+    target_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    sent INTEGER NOT NULL,
+    received INTEGER NOT NULL,
+    loss_pct REAL NOT NULL,
+    rtt_p50 REAL,
+    rtt_p95 REAL,
+    rtt_max REAL,
+    jitter REAL,
+    max_burst INTEGER NOT NULL,
+    PRIMARY KEY (ts, target_id)
+);
 CREATE TABLE IF NOT EXISTS bufferbloat_runs (
     ts INTEGER PRIMARY KEY,
     idle_rtt REAL NOT NULL,
@@ -195,6 +225,22 @@ pub fn bucket_for_window(window_secs: i64) -> i64 {
     (((raw + 59) / 60) * 60).max(60)
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UdpRunRow {
+    pub ts: i64,
+    pub target_id: String,
+    pub label: String,
+    pub sent: i64,
+    pub received: i64,
+    pub loss_pct: f64,
+    pub rtt_p50: Option<f64>,
+    pub rtt_p95: Option<f64>,
+    pub rtt_max: Option<f64>,
+    pub jitter: Option<f64>,
+    pub max_burst: i64,
+}
+
 pub struct History {
     conn: Mutex<Connection>,
     path: PathBuf,
@@ -221,6 +267,14 @@ impl History {
             .unwrap_or_default();
         conn.execute_batch("PRAGMA synchronous=NORMAL;").map_err(|e| e.to_string())?;
         conn.execute_batch(SCHEMA).map_err(|e| e.to_string())?;
+        // Targets retired from the probe list only ever hold unanswered or duplicate rows: drop them.
+        for table in ["samples", "hourly"] {
+            let placeholders = vec!["?"; network::RETIRED_TARGETS.len()].join(",");
+            let _ = conn.execute(
+                &format!("DELETE FROM {table} WHERE target_id IN ({placeholders})"),
+                rusqlite::params_from_iter(network::RETIRED_TARGETS.iter()),
+            );
+        }
         // v2 added columns; CREATE TABLE IF NOT EXISTS does not touch existing tables, so add them
         // explicitly. A duplicate-column error just means the table is already current.
         let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap_or(0);
@@ -316,6 +370,136 @@ impl History {
             )
             .map(|_| ())
             .map_err(|e| e.to_string())
+    }
+
+    /// Latest answered RTT of a target since `since` (None when it did not answer lately).
+    pub fn latest_rtt(&self, target: &str, since: i64) -> Option<f64> {
+        self.lock()
+            .query_row(
+                "SELECT rtt_ms FROM samples WHERE target_id = ?1 AND ts >= ?2 AND rtt_ms IS NOT NULL ORDER BY ts DESC LIMIT 1",
+                params![target, since],
+                |r| r.get(0),
+            )
+            .optional()
+            .ok()
+            .flatten()
+    }
+
+    pub fn record_session(&self, r: &crate::session::SessionRun) -> Result<(), String> {
+        self.lock()
+            .execute(
+                "INSERT OR REPLACE INTO session_runs(ts, peer_ip, note, sent, received, loss_pct, rtt_p50, rtt_p95, jitter, entry_rtt, icmp_blocked, hairpin, hop_count, hops_json)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                params![
+                    r.ts,
+                    r.peer_ip,
+                    r.note,
+                    r.sent,
+                    r.received,
+                    r.loss_pct,
+                    r.rtt_p50,
+                    r.rtt_p95,
+                    r.jitter,
+                    r.entry_rtt,
+                    r.icmp_blocked as i64,
+                    r.hairpin as i64,
+                    r.hop_count,
+                    serde_json::to_string(&r.hops).ok()
+                ],
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Most recent game-session measurements first (with their hop lists).
+    pub fn session_runs(&self, limit: i64) -> Result<Vec<crate::session::SessionRun>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT ts, peer_ip, note, sent, received, loss_pct, rtt_p50, rtt_p95, jitter, entry_rtt, icmp_blocked, hairpin, hop_count, hops_json
+                 FROM session_runs ORDER BY ts DESC LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([limit], |r| {
+                let json: Option<String> = r.get(13)?;
+                let hops: Vec<route::RouteHop> = json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_default();
+                let rows: Vec<report::HopRow> = hops
+                    .iter()
+                    .map(|h| report::HopRow { ttl: h.ttl, ip: h.ip.clone(), host: h.host.clone(), rtt_ms: h.rtt_ms, location: h.location.clone(), is_anomaly: h.is_anomaly })
+                    .collect();
+                Ok(crate::session::SessionRun {
+                    ts: r.get(0)?,
+                    peer_ip: r.get(1)?,
+                    note: r.get(2)?,
+                    sent: r.get(3)?,
+                    received: r.get(4)?,
+                    loss_pct: r.get(5)?,
+                    rtt_p50: r.get(6)?,
+                    rtt_p95: r.get(7)?,
+                    jitter: r.get(8)?,
+                    entry_rtt: r.get(9)?,
+                    icmp_blocked: r.get::<_, i64>(10)? != 0,
+                    hairpin: r.get::<_, i64>(11)? != 0,
+                    hop_count: r.get(12)?,
+                    largest_jump: report::latency_jumps(&rows, 5.0).into_iter().next(),
+                    hops,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
+    }
+
+    pub fn record_udp(&self, ts: i64, r: &crate::udp::UdpTargetResult) -> Result<(), String> {
+        self.lock()
+            .execute(
+                "INSERT OR REPLACE INTO udp_runs(ts, target_id, label, sent, received, loss_pct, rtt_p50, rtt_p95, rtt_max, jitter, max_burst)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                params![
+                    ts,
+                    r.id,
+                    r.label,
+                    r.stats.sent as i64,
+                    r.stats.received as i64,
+                    r.stats.loss_pct,
+                    r.stats.rtt_p50,
+                    r.stats.rtt_p95,
+                    r.stats.rtt_max,
+                    r.stats.jitter,
+                    r.stats.max_burst_loss as i64
+                ],
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Most recent UDP test results first.
+    pub fn udp_runs(&self, limit: i64) -> Result<Vec<UdpRunRow>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT ts, target_id, label, sent, received, loss_pct, rtt_p50, rtt_p95, rtt_max, jitter, max_burst
+                 FROM udp_runs ORDER BY ts DESC, target_id LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([limit], |r| {
+                Ok(UdpRunRow {
+                    ts: r.get(0)?,
+                    target_id: r.get(1)?,
+                    label: r.get(2)?,
+                    sent: r.get(3)?,
+                    received: r.get(4)?,
+                    loss_pct: r.get(5)?,
+                    rtt_p50: r.get(6)?,
+                    rtt_p95: r.get(7)?,
+                    rtt_max: r.get(8)?,
+                    jitter: r.get(9)?,
+                    max_burst: r.get(10)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
     }
 
     pub fn record_bufferbloat(&self, ts: i64, b: &BufferbloatResponse) -> Result<(), String> {
@@ -555,7 +739,9 @@ impl History {
                 .map_err(|e| e.to_string())?;
             rows.collect::<Result<_, _>>().map_err(|e| e.to_string())?
         };
-        Ok(Extras { routes, bloats, stats })
+        let udp = self.udp_runs(30)?;
+        let sessions = self.session_runs(20)?;
+        Ok(Extras { routes, bloats, udp, sessions, stats })
     }
 
     /// Time series of the router, first ISP hop and best xCloud entry point, bucketed for charts,
@@ -647,7 +833,7 @@ impl History {
         let conn = self.lock();
         conn.execute_batch(
             "DELETE FROM samples; DELETE FROM hourly; DELETE FROM route_runs; DELETE FROM bufferbloat_runs;
-             DELETE FROM meta WHERE key = 'rollup_until'; VACUUM;",
+             DELETE FROM udp_runs; DELETE FROM session_runs; DELETE FROM meta WHERE key = 'rollup_until'; VACUUM;",
         )
         .map_err(|e| e.to_string())
     }
@@ -789,6 +975,11 @@ pub async fn history_series(app: AppHandle, window_hours: u32) -> Result<SeriesR
     tauri::async_runtime::spawn_blocking(move || app.state::<History>().series(now_secs(), hours * HOUR))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn history_udp_runs(history: tauri::State<'_, History>, limit: Option<u32>) -> Result<Vec<UdpRunRow>, String> {
+    history.udp_runs(limit.unwrap_or(30).clamp(1, 200) as i64)
 }
 
 #[tauri::command]
@@ -999,7 +1190,7 @@ mod tests {
     fn series_buckets_losses_picks_the_best_primary_and_skips_empty_targets() {
         let h = History::open_in_memory().unwrap();
         let now = 100 * 24 * HOUR;
-        // 2 hours of 30 s samples: gateway always answers, xcloud_gssv_web answers, prod mostly lost
+        // 2 hours of 30 s samples: the gateway always answers, the xCloud entry loses 25%, a stray target is ignored
         for i in 0..240 {
             let ts = now - 2 * HOUR + i * 30;
             let lost = i % 4 == 0;
@@ -1007,8 +1198,8 @@ mod tests {
                 ts,
                 &[
                     ep(analysis::GATEWAY_ID, Some(0.5)),
-                    ep("xcloud_gssv_web", if lost { None } else { Some(40.0) }),
-                    ep("xcloud_gssv_prod", if i < 5 { Some(30.0) } else { None }),
+                    ep("xcloud_gssv_prod", if lost { None } else { Some(40.0) }),
+                    ep("sp_google_dns", Some(39.0)),
                 ],
             )
             .unwrap();
@@ -1018,7 +1209,7 @@ mod tests {
         let roles: Vec<&str> = r.series.iter().map(|s| s.role.as_str()).collect();
         assert_eq!(roles, vec!["local_gateway", "xcloud"]); // no ISP-hop data: no series, no fake line
         let x = r.series.iter().find(|s| s.role == "xcloud").unwrap();
-        assert_eq!(x.id, "xcloud_gssv_web"); // answered most
+        assert_eq!(x.id, "xcloud_gssv_prod");
         let total: i64 = x.points.iter().map(|p| p.n).sum();
         assert_eq!(total, 240);
         let avg_loss: f64 = x.points.iter().map(|p| p.loss_pct * p.n as f64).sum::<f64>() / total as f64;
@@ -1056,5 +1247,19 @@ mod tests {
         assert!(!h.close_to_tray());
         h.clear().unwrap();
         assert!(!h.close_to_tray(), "wiping measurements must not reset preferences");
+    }
+
+    #[test]
+    fn rows_of_retired_targets_are_purged_when_the_database_opens() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA).unwrap();
+        conn.execute("INSERT INTO samples(ts,target_id,rtt_ms) VALUES(1,'ix_rj',NULL),(1,'xcloud_gssv_prod',40.0),(1,'us_equinix_miami',NULL)", []).unwrap();
+        conn.execute("INSERT INTO hourly(hour_ts,target_id,n,n_lost) VALUES(0,'xcloud_brs_direct',120,0),(0,'xcloud_gssv_prod',120,0)", []).unwrap();
+        let h = History::init(conn, PathBuf::new()).unwrap();
+        let c = h.lock();
+        let left: Vec<String> = c.prepare("SELECT target_id FROM samples").unwrap().query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect();
+        assert_eq!(left, vec!["xcloud_gssv_prod"]);
+        let hourly: i64 = c.query_row("SELECT COUNT(*) FROM hourly", [], |r| r.get(0)).unwrap();
+        assert_eq!(hourly, 1);
     }
 }
