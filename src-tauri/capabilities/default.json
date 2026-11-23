@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Custom app commands need no plugin permission; the frontend only calls invoke(). Everything else (tray, window state, autostart, single instance) runs on the Rust side.",
+  "windows": [
+    "main"
+  ],
+  "permissions": []
+}

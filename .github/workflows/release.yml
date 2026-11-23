@@ -1,0 +1,106 @@
+name: "Release xCloud Cyber-Monitor"
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag de versão para o release (ex: v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && (contains(matrix.args, 'aarch64') && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libdbus-1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install frontend dependencies
+        run: npm ci || npm install
+
+      - name: Check versions and signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY ausente. Sem ela o updater não gera pacotes assinados (veja docs/RELEASE.md)."
+            exit 1
+          fi
+          npx tsx scripts/check-version.ts "$RELEASE_TAG"
+
+      - name: Build Tauri Desktop Application & Publish Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update packages; the matching public key is in src-tauri/tauri.conf.json
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.0.0' }}
+          releaseName: 'xCloud Cyber-Monitor Brasil v__VERSION__'
+          tauriScript: 'npx tauri'
+          releaseBody: |
+            ## xCloud Cyber-Monitor Brasil
+            
+            Instaladores para Windows, Linux e macOS. O app se atualiza sozinho (pacotes com assinatura verificada).
+
+            ### O que o app faz
+            - Mede a cada 30 s a latência, o jitter e a perda até o seu roteador, o 1º salto da operadora e o servidor xCloud, e guarda o histórico só neste computador.
+            - Mede a rota real (traceroute) e detecta desvio internacional (BGP hairpinning) a partir de dados medidos.
+            - Teste de bufferbloat com saturação real de download e upload (usa até ~330 MB e conecta à Cloudflare, sob confirmação).
+            - Aponta onde a degradação começa (rede local, acesso da operadora, núcleo ou caminho até a Microsoft) e gera um relatório de evidência para a operadora.
+            - Continua coletando na bandeja do sistema com a janela fechada.
+            - Copiloto de IA opcional (OpenAI); a chave fica no cofre do sistema.
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
